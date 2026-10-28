@@ -36,9 +36,10 @@ Cytoscape, date calculations) needs its own source and behavior verification.
 
 The public native entry now contains Packet, Pie, Flowchart, Sequence, Class,
 Quadrant, Radar, XY, Sankey, Treemap, Journey, Timeline, Gantt, Git graph,
-Mindmap and Block. Entry coverage does not imply that every family default or the
+Mindmap, Block, Kanban and C4. Entry coverage does not imply that every family default or the
 WinUI dependency switch is finished. The unconfigured global layout is ELK;
-both Flowchart and Class still require explicit source/session Dagre selection.
+Class still requires explicit source/session Dagre selection. Flowchart ELK,
+Architecture SVG and State are saved candidates awaiting native Windows/SVG acceptance.
 The original ELK depth-first feedback-edge selector and flat network-simplex
 layer assignment are ported separately, but
 the complete layered pipeline is not yet connected.
@@ -53,10 +54,12 @@ Brandes-Koepf placement, implicit point-port placement, orthogonal routing and
 original-edge path restoration are now separate native modules. Ordering and
 routing share the original random-generator state. Center/end label processors and the four-direction flat pipeline are implemented.
 The compound pipeline now has external-port layers, cross-group segment ownership,
-hierarchical crossing sweeps and a same-direction RIGHT geometry composition.
-These internal stages remain separate from the public default ELK renderer,
-which is not connected. Mixed-direction compound graphs still need their
-north/south hierarchy processors.
+hierarchical crossing sweeps, four-direction compound geometry and per-group
+spacing. Under INCLUDE_CHILDREN, the original importer forces all child graphs
+to inherit the root direction. North/south preprocessing, constrained ordering
+and restoration are separate internal processors. These stages remain separate
+from full default-renderer acceptance; the Flowchart entry is connected but its
+corrected Windows gate is pending.
 
 Journey and Timeline use measured actor/task/event labels; Timeline dispatches
 its original horizontal and vertical renderers. Gantt retains the required
@@ -65,16 +68,19 @@ commit/merge/cherry-pick symbols and measured labels. Their fixed SVG corpora
 pass against the original browser output with native Release measurements.
 
 Mindmap uses its original default CoSE tree layout, with separate pins for the
-Cytoscape and CoSE dependency versions. Its measured public rendering is under
-validation; force-directed positions are sensitive to the exact input boxes.
+Cytoscape and CoSE dependency versions. Force-directed positions are sensitive to the exact input boxes.
 The gate compares identical browser-measured boxes to native positions, routes
 and viewports strictly. The DirectWrite path separately checks local shape/label
 geometry, paint, edge connectivity and enclosure; different measured boxes are
 not required to converge to identical absolute force-layout positions.
 Block adds recursive columns, spans, nested grids, spacers and measured labels;
-its native public rendering is also under validation. Architecture currently
-has parser/DB and constraint stages, not a public renderer. Its fCoSE 2.x
-constraints are separate from Mindmap's CoSE 1.x dependencies.
+its public rendering uses real text measurement. Kanban adds measured columns,
+cards, ticket/assignee text and priority styling. C4 adds the five diagram
+headers, person/system/container/component/database shapes, nested boundaries,
+relationships and row configuration; its native SVG validation is in progress.
+Architecture has parser/DB, constraints and the original two-pass compound fCoSE
+layout and a candidate measured public renderer pending acceptance. Its fCoSE 2.x dependencies are separate from
+Mindmap's CoSE 1.x dependencies.
 
 Quadrant retains its original configured canvas, linear point scales, axis
 positions, title/accessibility metadata, quadrant labels and per-point/class
