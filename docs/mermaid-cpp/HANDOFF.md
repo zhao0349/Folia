@@ -1,86 +1,66 @@
 # Mermaid C++ continuity
 
-## Active implementation checkpoint - 2026-10-26
+## Active preservation checkpoint - 2026-10-28
 
-### Current execution and work table
+User requested stopping expansion, preserving all root/worker progress for reassignment,
+updating upstream PR #1 without merging, then reviewing and merging fork PR #6 only
+after overlap is resolved. This supersedes the previous continue-implementation queue.
+No new family implementation should start until work is reassigned.
 
-Root: D:/Folia, fork/mermaid-development. Mermaid implementation remains authorized.
-Ten-family batch a11217c9 passed ALL four Windows configurations in run40284749183.
-Contribution ddb3c05a2d365703bc479cfdc5e4e47b0cfa344c has the same functional tree;
-pushed and PR #1 title/body/head verified updated, OPEN and UNMERGED on 2026-10-26.
-No AGENTS.md diff vs508423f2, no HANDOFF change vs prior011e0656 in contribution.
-Delivered XY/Sankey/Treemap, Flowchart metadata/labels/fonts/nowrap, flat ELK phases.
-Do not reopen those accepted checks without related changes/actual regressions.
-Fork-only scheduling commits1293b97d/92efef54 are excluded from contribution.
+Root worktree: D:/Folia, fork/mermaid-development. Native candidate commits:
+224fdd56 fixes MSVC test capture after public Flowchart ELK d41e1594/model order
+23126d13 and Architecture SVG 2b5c7458; C4 public entry is 5bb0d1b5.
+b83ddfb1 preserves State entry; d313c746 preserves ER/ZenUML oracle preparation.
+These newer native entries are NOT accepted by a completed four-way gate.
 
-| Queue / stage | Status | Actual owner / handle | Candidate / verification | Next ready work / dependencies |
-| --- | --- | --- | --- | --- |
-| M1-L default ELK | running | /root/elk_layout | RIGHT compound native passed in40290724381; same-direction four-way a35784f6 in c3 gate. NS preprocessing6e4a7e4c and unified Forster/order f0427bf8 original fixed cases pass, native pending40292810934. | NS placement66a74b75 committed. Actual ELK import forces root direction on INCLUDE_CHILDREN, so arbitrary mixed direction is NOT a default-adapter dependency. Group options/inheritance4829f114 and oracle correction6ea3b6dc: original invalid elk.spacing.baseValue corrected to spacing.baseValue. Matching5bb Release with newfixture128asserts PASS. Owner now flowchart_elk.* scene adapter; actual default NODES_AND_EDGES model-order processor missing, implementing for fixed6cases; root paint/entry/platform. Fixed6cases/12SVG7a5d9b36 only; no default rendering claim. |
-| M1-F / M2-A Mindmap | accepted bounded default CoSE | /root | 2e367287 dual measurement gate: matching c3 Release same-box4 layout/routes/viewports and real DirectWrite4 local shapes/paint/connectivity/enclosure ALL PASS. Original5 CoSE native previously passed. | Explicit ELK awaits shared adapter. No further CoSE polishing without new regression. |
-| M2-T data/time / M2-C Block/Kanban/C4 | running | /root/xy_native | Matching a546 Release Journey12/Timeline12/Gantt16/Git16 SVG ALL PASS. Block default textColor fixc3 native passed; SVG grid label y -33.199 vs -36 fails. Kanban missing theme darkMode fixed e979d2cf, awaiting gate. | Block615e50d0 actual text-node Range and original alpha override: matching5bb Release16 SVG PASS, no reprojection limit remains. C4 public5bb0d1b5 gate40294192393 standalone native core/platform pass except obsolete options fixture. Matching c4-stage-release: Block16 PASS; Kanban wrapped label width158.3125 vs162.765625 FAIL; C4 context label y270.2048 vs271.9462 FAIL. Owner pauses State to fix Kanban then C4 without widening tolerances. |
-| M2-R State -> ER -> Requirement | candidate paused for actual data-family failures | /root/xy_native | State fixed8success/2error and16originalSVG; new state files and ignored state-platform.patch not yet frozen/compiled | First classic Dagre package basic/aliases/labels/LR/composite/nested/style/config. Notes/concurrency/neo remain later requirements, not removed. Shared patch only. |
-| M2-Z / Architecture | running | /root/flowchart_closeout | Parser0bf85675/constraints9d524a1b committed. Prior fCoSE intermediate snapshots were EMPTY because hook targeted unused src classes. Correct actual bundle hook08f47034 now records2 passes and10 movement snapshots each, original6graphs pass; native pending. | fCoSE compound/two-pass61b7d08a actual native standalone D/R passed (other NS failure remains). Owner Architecture browser measurements/SVG: original12SVG captured, separate cy Helvetica label bounds from SVG theme-font measurement; no constant per-case shift. Then ZenUML. |
-| M3 WinUI candidate | host partial | /root | e0540747 build40285910373 SUCCESS. XY preview/save/theme/maximize/PDF observed. Sankey alpha fix7c904ab9 matching c3 native18SVG PASS; actual host serialization reprojection labels visible. | New compiled WinUI host check remains pending; production switch gated. |
-| M4 production switch / M5 acceptance | blocked on requirements | unassigned | Production remains Rust | Requires native/default families and actual host acceptance. |
+Accepted contribution baseline f98c996643719ab7036e397d08b391f9bb73bd8a passed
+ALL four Windows configurations in run40296270685. It contains 17 public families:
+Packet/Pie/Flowchart/Sequence/Class/Quadrant/Radar/XY/Sankey/Treemap/Journey/
+Timeline/Gantt/Git/Mindmap/Block/Kanban. It was pushed to upstream PR #1 on
+2026-10-28; PR remains OPEN, UNMERGED. The subsequent source-only candidate
+archive in docs/mermaid-cpp/candidates/2026-10-28 preserves newer work without
+activating it in the accepted contribution build. Fork execution guides excluded.
 
-Current main functional HEAD 6ea3b6dc. Contribution staging HEAD2058bf4c
-contains9d99742c plus effective spacing oracle correction6ea, excludes C4 and
-fork guides. NOT pushed to PR yet; validation branch reviewed-family-gate
-run40295107778 active. Previous source-equivalent base3fe41864 matched9d99742c.
-Closeout gate40293971316 at9d99742c includes Block alpha/text observation and
-NS Forster iterator fix. C4 gate40294192393 at5bb0d1b5 now running.
-Earlier f0427bf8 gate40292810934 standalone D/R failed only NS Forster fixed-north
-7asserts, fixed9d99742c. Real fCoSE constraints/movement passed; compound/two-pass
-61b7d08a native also passed standalone D/R in40293398588, whose only failures
-were the same old NS assertions. No empty snapshot acceptance remains.
- New Windows gate40292810934 on
-codex/mermaid-cpp-north-south-gate includes Kanban fallback, real fCoSE snapshots,
-NS preprocess/order. Previous gate40291187786 at c3d98c03 standalone D/R failed
-only Kanban configuration in core and platform; integrated jobs still running
-at last observation. Matching artifacts build/mermaid-cpp/current-stage-release.
-Root independently ran original SVG comparisons: Mindmap dual4+4 PASS, Sankey18
-PASS, Block FAIL label vertical box as recorded above. Do not widen tolerance.
-Earlier gates40288695568/40289762673/40290724381 are superseded for failed paths;
-RIGHT compound native passed standalone D/R in40290724381. Public upstream
-still ddb3c05a; later stages not yet delivered until corresponding gate succeeds.
-Fork-only commits1293b97d/92efef54/2da5eb9d and subsequent HANDOFF updates must
-be excluded from contribution. No merge authorized.
+| Queue | Owner / stopping state | Saved candidate and evidence | Missing / next reassigned work |
+| --- | --- | --- | --- |
+| Flowchart ELK | former elk_layout stopped; save_elk inventory complete | d41e1594 +23126d13, fixed six original cases;224fdd56 test capture correction | Corrected Windows native/SVG gate. Old40296681174/40296833011 failed on corrected MSVC test. |
+| Class ELK | save_elk complete; no active implementation | seven untracked source/tool/fixture files also saved losslessly in contribution class-elk.patch; shared ignored patch saved class-elk-shared.patch | Original function extraction fails placedTerminalLabels; fixture/test seven columns versus proposed nine; no public painter, native build or SVG acceptance. Do not add directly to source glob without shared seam. |
+| State | save_data complete | b83ddfb1; original8 DB/2 errors pass;11 source pins; RoughJS notice verified;16 original SVGs captured | Native compile/tests and same-host SVG. Shared patch fully applied. |
+| ER | save_data complete | d313c746; original8 DB/2 errors pass | No native modules or completed browser capture. Only preparation tools/fixture. |
+| Architecture / ZenUML | save_zenuml complete | Architecture2b5c7458; ZenUML d313c746 has5 original parser/layout/SVG cases, reproducible3.49.2 preparation and MIT notice | Architecture corrected native/SVG gate; ZenUML has no native implementation. |
+| Data family acceptance | stopped | Block16/Kanban12 fixed comparisons and17-family four-way gate pass | C4 same-host SVG pending; cross-machine font diagnosis is not acceptance. |
+| M3 host | partial / no active process owner | e0540747 build40285910373; XY preview/save/theme/PDF observed; Sankey serialization reprojection visible | Newly compiled host acceptance still pending. Production remains Rust. |
+| M4/M5 | blocked on requirements | No production switch | Complete required native/default rendering and actual host acceptance. |
 
-Root owns render_entry, platform/ABI, CMake/workflow, source-lock and integration.
-All three agents above remain active; no local compiler. New candidate sources
-are shared main-tree edits; coordinate before touching owner files. Independent
-native stages are candidates until their matching gate passes. Keep source hashes
-consistent with the byte-preserving oracle contract; worker normalized source
-hashes must be checked against original content before recording local raw bytes.
+Previous agent sessions no longer exist. Replacement agents save_data/save_elk/
+save_zenuml performed bounded preservation only; their verification processes exited.
+No local compiler or running build handle is retained. Original ignored evidence and
+WinUI candidate remain in build/mermaid-cpp; do not remove them during reassignment.
 
-Current host window5310942 (cua binding foliaHost), e0540747 app, synthetic
-host-data-check.md saved under ignored winui-e0540747-app; XY/Sankey seen.
-Launch with cwd inherited from Codex breaks theme assets. Resolved test launch
-using ignored Folia-host-check.lnk with WorkingDirectory=artifact directory,
-opened via Explorer UI; current app status Ready, no theme fallback.
-Other test windows17763220 (same exe wrong cwd),36242516 (old app Settings)
-remain open; explorer5506084. No personal documents touched. Host dark theme XY and maximize verified; Follow Windows restored. PDF
-host-data-check.pdf 73419 bytes, one A4 page visually inspected; reveals Sankey
-labels absent. Current app opened ignored sankey-host-diagnosis/candidate-alpha.md:
-raw and normalized candidate both show labels. This host proof reprojects the
-serialization fix; it is not a newly compiled WinUI binary. Source fix7c904ab9
-now also passes matching native18 SVG comparisons. Real native/usvg retain glyphs.
-No complete M3 or full editing acceptance claim.
+Fork PR #6 (Dory815, head0ac379fd) contains a historical1772-file canonical archive
+and12 worker patches, not active code changes. Review retains all archives and
+independent ER/Requirement/Railroad material, but rejects wholesale replacement of
+accepted implementations: its Timeline/Kanban have unsupported renderers and its
+ELK candidate only handles paths. Its HANDOFF is historical execution material.
+Merge destination must therefore be fork-only codex/mermaid-checkpoint-review,
+not feat/mermaid-cpp-port. Current authoritative HANDOFF is this file.
 
-Root uncommitted adapter candidates: third_party/mermaid-cpp/src/flowchart_elk_paint.inc
-(rounded path and ordinary node clipping), flowchart_svg.cpp/render_entry.cpp
-now wired to candidate ELK scene; tests/platform/mermaid_elk_flowchart.cpp
-(same6cases) and CMake/workflow wired but NOT committed/compiled. Must wait
-for owner real default model-order/scene before gate; do not publish as available.
-Architecture measurement seam applied to fcose_architecture.* but uncommitted,
-awaiting owner full SVG package; new architecture_measurement/icons/probe/test
-are owned by flowchart_closeout. README has uncommitted phase wording update.
-No local compiler/build process. Agent Architecture/State candidates remain
-uncommitted; preserve ownership. All three agents active.
+Preservation complete: upstream PR #1 head1bd9807145471f6bee3462f9ed802847961c3df0,
+verified OPEN and unmerged. The candidate archive is also saved on this fork at
+66ffb601, with candidate README clarification e625e7db. PR #6 merged as
+33f894beac03a7b24568d43fc89fa203b8e6193e into codex/mermaid-checkpoint-review.
+Runtime diff against f98c9966 is empty after excluding historical HANDOFF and
+checkpoint docs. All twelve raw Git patch hashes match their manifest.
+REVIEW-2026-10-28.md on that branch records retention decisions.
 
-Next root actions: finish integrating bounded frozen candidates, fix actual new
-CI failures through their owners, update each validated public batch via clean
-entry-contribution, keep PR #1 open/unmerged, and synchronize current table in place.
+No worker remains implementing. Class ELK's seven original untracked files are
+intentionally left in place, with recoverable public patch copies. All other new
+source work is committed; ignored original observations and shared patches remain.
+No archived PR #6 patch was applied to active code.
+
+Next: reassign from candidate README gaps and independent ER/Requirement/Railroad
+material. Do not restart all previous queues automatically.
+No upstream merge authorized. The user authorized only the reviewed fork PR merge.
 
 ### Previous accepted implementation evidence (historical)
 
