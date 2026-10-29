@@ -8,7 +8,7 @@
 保留原版算法、真实文字测量、来源 pin 和许可证；核心不使用 Windows API。不得用逐案例特判或放宽容差替代修复。
 并行工作时实际派工并维护 owner；共享入口/平台/CMake/工作流/source-lock 由一位集成负责人修改。用户要求直接完成时不得召唤子智能体。
 交接原位维护当前状态、真实阻塞和下一步，不累计历史 checkpoint。恢复后先读现状，不盲从旧聊天 next。
-fork 只保留 main 和 feat/mermaid-cpp-port（dev 角色，现有上游 PR 来源）。内部执行资料仅留 main，不随功能挑选进入上游。
+fork 只保留 master 和 feat/mermaid-cpp-port（dev 角色，现有上游 PR 来源）。内部执行资料仅留 master，不随功能挑选进入上游。
 上游 PR #1 只能更新，未经明确授权不得合并、发布或切换生产依赖。不得强推重写历史。
 
 ## Math migration continuity
