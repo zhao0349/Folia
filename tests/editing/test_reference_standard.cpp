@@ -2,11 +2,11 @@
 #include <string>
 
 #include "support/folia_test.hpp"
-import folia.core.parser;
-import folia.core.ast;
-import folia.core.inline_cst;
-import folia.core.inline_document;
-import folia.core.utf;
+import folia.markdown.parser;
+import folia.markdown.ast;
+import folia.markdown.inline_cst;
+import folia.markdown.inline_document;
+import folia.markdown.utf;
 
 using namespace folia;
 using namespace boost::ut;
@@ -92,7 +92,7 @@ suite reference_standard_tests = [] {
     });
     expect(fatal(bool(paragraph != parsed.document.root.children.end())));
     if (paragraph != parsed.document.root.children.end()) {
-        expect(fatal(bool(!reference_inline_kind(paragraph->inline_content, InlineCstKind::Strong))));
+        expect(fatal(bool(reference_inline_kind(paragraph->inline_content, InlineCstKind::Strong))));
         expect(fatal(bool(!reference_inline_kind(paragraph->inline_content, InlineCstKind::Emphasis))));
         expect(fatal(bool(!reference_inline_kind(paragraph->inline_content, InlineCstKind::Strikethrough))));
         expect(fatal(bool(!reference_inline_kind(paragraph->inline_content, InlineCstKind::Link))));

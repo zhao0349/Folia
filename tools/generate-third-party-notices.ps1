@@ -45,11 +45,13 @@ Add-LicenseFile 'Boost.UT (test dependency) — Boost Software License 1.0' `
     (Join-Path $Root 'third_party\ut\LICENSE.md')
 Add-LicenseFile 'SRELL — BSD 2-Clause License' `
     (Join-Path $Root 'third_party\srell\LICENSE')
+Add-LicenseFile 'Fluent UI System Icons — Microsoft, MIT License (82ecf7cbdb43684403c7125efa160be04a33dca5)' `
+    (Join-Path $Root 'third_party\fluentui-system-icons\LICENSE')
 Add-LicenseFile 'ICU4C 78.3 — Unicode License V3' `
     (Join-Path $Root 'build\dependencies\icu-78.3\root\LICENSE')
 Add-LicenseFile 'QuickJS — MIT License' `
     (Join-Path $Root 'src\app-winui\third_party\quickjs\LICENSE')
-Add-LicenseFile 'MathJax 4.1.3 and NewCM, bbm, bboldx, dsfont fonts — Apache License 2.0' `
+Add-LicenseFile 'MathJax 4.1.3, mediawiki-texvc 2.7.9 aliases, and NewCM, bbm, bboldx, dsfont fonts — Apache License 2.0' `
     (Join-Path $Root 'src\app-winui\Assets\mathjax\LICENSE-MathJax.txt')
 Add-LicenseFile 'Native SVG normalizer wrapper — MIT License' `
     (Join-Path $Root 'src\app-winui\third_party\usvg-normalizer\LICENSE-MIT')

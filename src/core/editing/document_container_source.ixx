@@ -2,14 +2,14 @@
 // reference existing source owners; they never retain body text.
 export module folia.core.document_container_source;
 import std;
-import folia.core.ast;
-import folia.core.ids;
-import folia.core.block_tree;
-import folia.core.container_source;
-import folia.core.document;
-import folia.core.document_text;
+import folia.markdown.ast;
+import folia.markdown.ids;
+import folia.markdown.block_tree;
+import folia.markdown.container_source;
+import folia.markdown.document;
+import folia.markdown.document_text;
 import folia.core.document_transaction;
-import folia.core.text_edit;
+import folia.markdown.text_edit;
 
 export namespace folia::document_container_source {
 
@@ -36,7 +36,7 @@ inline std::vector<ContainerSourceSnapshot> snapshot_ancestors(
 }
 
 inline std::u32string canonical_prefix(const BlockNode& container) {
-    if (container.kind == BlockKind::BlockQuote) return U"> ";
+    if (container.kind == BlockKind::BlockQuote || container.kind == BlockKind::Callout) return U"> ";
     if (container.kind != BlockKind::ListItem && container.kind != BlockKind::TaskListItem) return {};
     const auto& marker = container.item_special().marker;
     std::size_t columns = 0;

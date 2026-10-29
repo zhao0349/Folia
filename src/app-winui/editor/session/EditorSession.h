@@ -53,7 +53,6 @@ namespace winrt::Folia
             };
 
             folia::Editor editor;
-            std::optional<folia::SourceEditor> sourceEditor;
             folia::RenderModel renderModel;
             folia::ThemeProfile theme = folia::default_theme_profile();
             std::wstring baseDirectory;
@@ -110,6 +109,7 @@ namespace winrt::Folia
         winrt::hstring DisplayName() const;
         winrt::hstring Path() const;
         uint64_t Revision() const;
+        std::uint64_t ContentState() const noexcept;
         std::size_t CharacterCount() const;
         std::wstring TextInputTextUtf16(folia::NodeId containerId) const;
         std::size_t TextInputAcpOffset(folia::TextPosition position) const;
@@ -120,6 +120,7 @@ namespace winrt::Folia
         std::optional<std::u32string> EditableSource(folia::NodeId id) const;
         std::optional<EditorDocumentInteraction> InteractionAt(folia::TextPosition position) const;
         folia::TextSelection Selection() const;
+        folia::InlineStyle ActiveInlineStyle() const;
         folia::platform::editor::EditorShortcutScope ShortcutScope() const;
         std::optional<EditorLatexCompletionSource> LatexCompletionSourceAtCaret() const;
         folia::RenderModel const& RenderModel() const;

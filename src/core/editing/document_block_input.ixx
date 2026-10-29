@@ -1,20 +1,36 @@
 // Non-list block input rules: marker activation, raw blocks, and container unwrapping.
 export module folia.core.document_block_input;
 import std;
-import folia.core.ast;
-import folia.core.container_source;
-import folia.core.block_source;
-import folia.core.block_tree;
-import folia.core.document;
+import folia.markdown.ast;
+import folia.markdown.container_source;
+import folia.markdown.block_source;
+import folia.markdown.block_tree;
+import folia.markdown.document;
 import folia.core.document_container_source;
 import folia.core.document_edit_support;
-import folia.core.ids;
-import folia.core.inline_document;
-import folia.core.text_edit;
+import folia.markdown.ids;
+import folia.markdown.inline_document;
+import folia.markdown.text_edit;
 import folia.core.document_input_syntax;
 import folia.core.document_list_input;
 
 export namespace folia::document_input_rules::detail {
+
+inline void record_list_item_boundary(
+    EditorDocument& document,
+    std::vector<DocumentOperation>& operations,
+    NodeId item_id,
+    const std::optional<std::u32string>& boundary) {
+    if (!boundary) return;
+    auto* item = find_block(document.root, item_id);
+    if (!item || item->separator_before == boundary) return;
+    DocumentTreeEdit update;
+    update.kind = DocumentTreeEditKind::UpdatePayload;
+    update.before = document_transaction_detail::payload_shell(*item);
+    item->separator_before = boundary;
+    update.after = document_transaction_detail::payload_shell(*item);
+    operations.emplace_back(std::move(update));
+}
 
 inline std::optional<document_edit_detail::RecordedBlockEdit> replace_paragraph_with_container(
     EditorDocument& document,
@@ -90,6 +106,9 @@ inline std::optional<document_edit_detail::RecordedBlockEdit> replace_paragraph_
     BlockNode list;
     list.id = allocator.allocate();
     list.kind = match.kind == MarkerMatch::Kind::TaskList ? BlockKind::TaskList : BlockKind::List;
+    // The new list takes the paragraph's root position, so it must also own
+    // the paragraph's separator from its preceding root sibling.
+    list.separator_before = source_block.separator_before;
     list.ensure_list_special().ordered = match.kind == MarkerMatch::Kind::OrderedList;
     list.ensure_list_special().start = list.list_special().ordered ? match.list_start : 1;
     list.ensure_list_special().delimiter = match.list_delimiter;
@@ -131,6 +150,8 @@ inline std::optional<document_edit_detail::RecordedBlockEdit> replace_paragraph_
     std::size_t effective_index = index;
     if (effective_index > 0 && compatible_lists(parent->children[effective_index - 1], *inserted_list)) {
         auto* previous = &parent->children[effective_index - 1];
+        const auto list_boundary = inserted_list->separator_before;
+        const auto moved_item_id = inserted_list->children.front().id;
         const auto target_index = previous->children.size();
         DocumentTreeEdit move_item;
         move_item.kind = DocumentTreeEditKind::Move;
@@ -144,6 +165,7 @@ inline std::optional<document_edit_detail::RecordedBlockEdit> replace_paragraph_
             return std::nullopt;
         }
         document_container_source::append_container_tree_operation(document, result.operations, std::move(move_item));
+        record_list_item_boundary(document, result.operations, moved_item_id, list_boundary);
 
         DocumentTreeEdit remove_list;
         remove_list.kind = DocumentTreeEditKind::Remove;
@@ -159,7 +181,9 @@ inline std::optional<document_edit_detail::RecordedBlockEdit> replace_paragraph_
     if (effective_index + 1 < parent->children.size()
         && compatible_lists(*inserted_list, parent->children[effective_index + 1])) {
         const auto next_id = parent->children[effective_index + 1].id;
+        const auto list_boundary = parent->children[effective_index + 1].separator_before;
         auto* next = &parent->children[effective_index + 1];
+        bool first_moved_item = true;
         while (!next->children.empty()) {
             DocumentTreeEdit move_item;
             move_item.kind = DocumentTreeEditKind::Move;
@@ -168,12 +192,18 @@ inline std::optional<document_edit_detail::RecordedBlockEdit> replace_paragraph_
             move_item.other_parent_id = inserted_list->id;
             move_item.other_index = inserted_list->children.size();
             move_item.moved_id = next->children.front().id;
+            const auto moved_item_id = move_item.moved_id;
+            const auto preserve_boundary = first_moved_item;
             auto moved_item = remove_block(*next, 0);
+            first_moved_item = false;
             if (!moved_item || !insert_block(
                     *inserted_list, move_item.other_index, std::move(*moved_item))) {
                 return std::nullopt;
             }
         document_container_source::append_container_tree_operation(document, result.operations, std::move(move_item));
+            if (preserve_boundary) {
+                record_list_item_boundary(document, result.operations, moved_item_id, list_boundary);
+            }
         }
         DocumentTreeEdit remove_list;
         remove_list.kind = DocumentTreeEditKind::Remove;
@@ -251,11 +281,20 @@ inline std::optional<document_edit_detail::RecordedBlockEdit> remove_heading_pre
     DocumentTreeEdit update;
     update.kind = DocumentTreeEditKind::UpdatePayload;
     update.before = document_transaction_detail::payload_shell(*block);
-    block->kind = BlockKind::Paragraph;
-    block->ensure_text_special().level = 0;
-    block->ensure_text_special().slug.clear();
-    block->ensure_text_special().opening_marker.clear();
-    block->ensure_text_special().closing_marker.clear();
+    auto& heading = block->ensure_text_special();
+    const auto hash = heading.opening_marker.find(U'#');
+    if (heading.level > 1 && hash != std::u32string::npos) {
+        // The parser already classified this as an ATX heading. Preserve its
+        // exact surrounding whitespace while reducing the semantic level.
+        --heading.level;
+        heading.opening_marker.erase(hash, 1);
+    } else {
+        block->kind = BlockKind::Paragraph;
+        heading.level = 0;
+        heading.slug.clear();
+        heading.opening_marker.clear();
+        heading.closing_marker.clear();
+    }
     update.after = document_transaction_detail::payload_shell(*block);
     result.operations.emplace_back(std::move(update));
     return result;

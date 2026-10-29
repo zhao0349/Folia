@@ -3,16 +3,17 @@
 #include <vector>
 
 #include "support/folia_test.hpp"
-import folia.core.ast;
-import folia.core.block_tree;
+import folia.markdown.ast;
+import folia.markdown.block_tree;
 import folia.core.command;
 import folia.core.document_format;
 import folia.core.editor;
-import folia.core.inline_cst;
-import folia.core.selection;
-import folia.core.serializer;
+import folia.markdown.utf;
+import folia.markdown.inline_cst;
+import folia.markdown.selection;
+import folia.markdown.serializer;
 import folia.core.source_editor;
-import folia.core.text_edit;
+import folia.markdown.text_edit;
 
 using namespace folia;
 using namespace boost::ut;
@@ -109,16 +110,18 @@ suite document_format_tests = [] {
     expect(formatted.source == U"# Name\n\n- item");
     expect(formatted.selection == SourceSelection::caret(formatted.source.find(U"item") + 2));
 
-    SourceEditor editor{std::u32string(source)};
-    editor.set_selection(before_selection);
-    expect(fatal(editor.replace_document(formatted.source, formatted.selection)));
-    expect(editor.source() == U"# Name\n\n- item");
-    expect(editor.selection() == formatted.selection);
+    Editor editor{cps_to_utf8(source)};
+    expect(fatal(editor.enter_source_mode()));
+    editor.set_source_selection(before_selection);
+    Command format;format.kind=CommandKind::FormatDocument;
+    expect(fatal(editor.execute_command(format)));
+    expect(editor.source_editor()->source() == U"# Name\n\n- item");
+    expect(editor.source_editor()->selection() == formatted.selection);
     expect(fatal(editor.undo()));
-    expect(editor.source() == source);
-    expect(editor.selection() == before_selection);
+    expect(editor.source_editor()->source() == source);
+    expect(editor.source_editor()->selection() == before_selection);
     expect(fatal(editor.redo()));
-    expect(editor.source() == U"# Name\n\n- item");
+    expect(editor.source_editor()->source() == U"# Name\n\n- item");
 };
 
 "nested extension containers format recursively without flattening"_test = [] {

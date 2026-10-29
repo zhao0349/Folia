@@ -93,14 +93,13 @@
       <PrecompiledHeader>Use</PrecompiledHeader>
       <PrecompiledHeaderFile>pch.h</PrecompiledHeaderFile>
       <PrecompiledHeaderOutputFile>$(IntDir)pch.pch</PrecompiledHeaderOutputFile>
-      <AdditionalIncludeDirectories>$(ProjectDir);$(ProjectDir)..\platform;$(ProjectDir)..\..\include;$(FoliaIcuRoot)include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>$(ProjectDir);$(ProjectDir)..\platform;$(ProjectDir)..\math\include;$(FoliaIcuRoot)include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <WarningLevel>Level4</WarningLevel>
-      <LanguageStandard Condition="'$(VisualStudioVersion)' &gt;= '18.0'">stdcpplatest</LanguageStandard>
-      <LanguageStandard Condition="'$(VisualStudioVersion)' &lt; '18.0'">stdcpp17</LanguageStandard>
+      <LanguageStandard>stdcpplatest</LanguageStandard>
       <AdditionalOptions>%(AdditionalOptions) /bigobj</AdditionalOptions>
     </ClCompile>
     <Link>
-      <AdditionalDependencies>$(FoliaNativeMathImportLibrary);$(FoliaIcuRoot)lib64\icuin.lib;$(FoliaIcuRoot)lib64\icuuc.lib;$(FoliaIcuRoot)lib64\icudt.lib;d2d1.lib;d3d11.lib;dwrite.lib;dxgi.lib;windowscodecs.lib;shlwapi.lib;winspool.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalDependencies>$(FoliaNativeMathImportLibrary);$(FoliaIcuRoot)lib64\icuin.lib;$(FoliaIcuRoot)lib64\icuuc.lib;$(FoliaIcuRoot)lib64\icudt.lib;d2d1.lib;dxguid.lib;d3d11.lib;dwrite.lib;dxgi.lib;windowscodecs.lib;dwmapi.lib;shlwapi.lib;winspool.lib;%(AdditionalDependencies)</AdditionalDependencies>
       <AdditionalOptions>%(AdditionalOptions) /STACK:33554432</AdditionalOptions>
     </Link>
   </ItemDefinitionGroup>
@@ -112,10 +111,13 @@
   <ItemDefinitionGroup Condition="'$(Configuration)'=='Release'">
     <ClCompile>
       <PreprocessorDefinitions>NDEBUG;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <DebugInformationFormat>ProgramDatabase</DebugInformationFormat>
     </ClCompile>
     <Link>
       <EnableCOMDATFolding>true</EnableCOMDATFolding>
       <OptimizeReferences>true</OptimizeReferences>
+      <GenerateDebugInformation>DebugFull</GenerateDebugInformation>
+      <ProgramDatabaseFile>$(OutDir)$(TargetName).pdb</ProgramDatabaseFile>
     </Link>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(FoliaSelfContained)'=='true' and '$(Configuration)'=='Debug'">
@@ -149,6 +151,7 @@
     <ClInclude Include="pch.h" />
     <ClInclude Include="storage\AssetPaths.h" />
     <ClInclude Include="storage\DocumentEncodingService.h" />
+    <ClInclude Include="storage\ClipboardImageStore.h" />
     <ClInclude Include="localization\Localization.h" />
     <ClInclude Include="settings\AppSettings.h" />
     <ClInclude Include="settings\ShortcutSettingsSerialization.h" />
@@ -173,13 +176,22 @@
     <ClInclude Include="editor\rendering\EditorViewportMaterializer.h" />
     <ClInclude Include="editor\rendering\EditorDocumentRenderPass.h" />
     <ClInclude Include="editor\rendering\EditorRenderResources.h" />
+    <ClInclude Include="editor\rendering\EditorPopupShadow.h" />
+    <ClInclude Include="editor\rendering\EditorMathSyntax.h" />
+    <ClInclude Include="editor\rendering\EditorCaretAnimation.h" />
+    <ClInclude Include="editor\interaction\EditorAnimationController.h" />
     <ClInclude Include="media\EditorGifDecoder.h" />
     <ClInclude Include="editor\rendering\EditorRenderCache.h" />
+    <ClInclude Include="editor\rendering\EditorImageCache.h" />
+    <ClInclude Include="media\ImageSource.h" />
+    <ClInclude Include="media\ImageResourceCache.h" />
     <ClInclude Include="editor\rendering\EditorSvgPainter.h" />
+    <ClInclude Include="editor\rendering\EditorSyntaxIcons.h" />
     <ClInclude Include="editor\rendering\EditorTextLayoutEngine.h" />
     <ClInclude Include="editor\interaction\EditorTableInteraction.h" />
     <ClInclude Include="editor\rendering\EditorInlineImageRenderer.h" />
     <ClInclude Include="editor\rendering\EditorEmbeddedDraw.h" />
+    <ClInclude Include="editor\rendering\EditorMathPreview.h" />
     <ClInclude Include="editor\rendering\EditorTableBlockRenderer.h" />
     <ClInclude Include="editor\interaction\EditorFrameScheduler.h" />
     <ClInclude Include="editor\interaction\EditorSelectionDrag.h" />
@@ -188,7 +200,16 @@
     <ClInclude Include="editor\interaction\EditorPointerController.h" />
     <ClInclude Include="editor\interaction\EditorKeyboardController.h" />
     <ClInclude Include="editor\interaction\EditorDocumentController.h" />
+    <ClInclude Include="workspace\WorkspaceDocuments.h" />
+    <ClInclude Include="workspace\WorkspaceIcons.h" />
+    <ClInclude Include="workspace\WorkspaceFileOperations.h" />
+    <ClInclude Include="workspace\FolderEntry.h" />
+    <ClInclude Include="workspace\FolderExplorerView.h" />
+    <ClInclude Include="workspace\FolderExplorerState.h" />
+    <ClInclude Include="workspace\WorkspaceFileCoordinator.h" />
+    <ClInclude Include="workspace\FolderExplorerController.h" />
     <ClInclude Include="editor\interaction\EditorDocumentControllerState.h" />
+    <ClInclude Include="MainWindow.Lifecycle.h" />
     <ClInclude Include="export\EditorPdfPrintJob.h" />
     <ClInclude Include="export\EditorPdfExportTypes.h" />
     <ClInclude Include="editor\interaction\EditorSidebarController.h" />
@@ -216,41 +237,49 @@
   <ItemGroup>
     <ApplicationDefinition Include="App.xaml" />
     <Page Include="MainWindow.xaml" />
+    <Page Include="workspace\FolderExplorer.xaml"><SubType>Designer</SubType></Page>
+    <Page Include="workspace\WorkspaceChrome.xaml" />
   </ItemGroup>
   <ItemGroup>
-    <ClCompile Include="..\core\model\ast.ixx">
-    <ClCompile Include="..\core\model\container_source.ixx">
+    <ClCompile Include="..\markdown\markdown.ixx">
+      <CompileAs>CompileAsCppModule</CompileAs>
       <PrecompiledHeader>NotUsing</PrecompiledHeader>
     </ClCompile>
-    <ClCompile Include="..\core\parsing\block_source.ixx">
+    <ClCompile Include="..\markdown\model\ast.ixx">
       <PrecompiledHeader>NotUsing</PrecompiledHeader>
     </ClCompile>
-    <ClCompile Include="..\core\parsing\block_line_recognizer.ixx">
+    <ClCompile Include="..\markdown\model\container_source.ixx">
       <PrecompiledHeader>NotUsing</PrecompiledHeader>
     </ClCompile>
-    <ClCompile Include="..\core\parsing\markdown_html.ixx">
+    <ClCompile Include="..\markdown\parsing\block_source.ixx">
       <PrecompiledHeader>NotUsing</PrecompiledHeader>
     </ClCompile>
-    <ClCompile Include="..\core\parsing\html_cst.ixx">
+    <ClCompile Include="..\markdown\parsing\block_line_recognizer.ixx">
+      <PrecompiledHeader>NotUsing</PrecompiledHeader>
+    </ClCompile>
+    <ClCompile Include="..\markdown\parsing\markdown_html.ixx">
+      <PrecompiledHeader>NotUsing</PrecompiledHeader>
+    </ClCompile>
+    <ClCompile Include="..\markdown\parsing\html_cst.ixx">
       <PrecompiledHeader>NotUsing</PrecompiledHeader>
       <AdditionalIncludeDirectories>..\..\third_party\tree-sitter\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
     </ClCompile>
-    <ClCompile Include="..\core\model\block_tree.ixx">
+    <ClCompile Include="..\markdown\model\block_tree.ixx">
       <PrecompiledHeader>NotUsing</PrecompiledHeader>
     </ClCompile>
-    <ClCompile Include="..\core\model\callout.ixx">
+    <ClCompile Include="..\markdown\model\callout.ixx">
       <PrecompiledHeader>NotUsing</PrecompiledHeader>
     </ClCompile>
     <ClCompile Include="..\core\editing\command.ixx">
       <PrecompiledHeader>NotUsing</PrecompiledHeader>
     </ClCompile>
-    <ClCompile Include="..\core\support\diagnostics.ixx">
+    <ClCompile Include="..\markdown\support\diagnostics.ixx">
       <PrecompiledHeader>NotUsing</PrecompiledHeader>
     </ClCompile>
-    <ClCompile Include="..\core\parsing\dialect.ixx">
+    <ClCompile Include="..\markdown\parsing\dialect.ixx">
       <PrecompiledHeader>NotUsing</PrecompiledHeader>
     </ClCompile>
-    <ClCompile Include="..\core\model\document.ixx">
+    <ClCompile Include="..\markdown\model\document.ixx">
       <PrecompiledHeader>NotUsing</PrecompiledHeader>
     </ClCompile>
     <ClCompile Include="..\core\editing\document_edit.ixx">
@@ -308,6 +337,8 @@
       <PrecompiledHeader>NotUsing</PrecompiledHeader>
     </ClCompile>
     <ClCompile Include="..\core\editing\document_transaction.ixx">
+      <PrecompiledHeader>NotUsing</PrecompiledHeader>
+    </ClCompile>
     <ClCompile Include="..\core\editing\document_container_source.ixx">
       <PrecompiledHeader>NotUsing</PrecompiledHeader>
     </ClCompile>
@@ -326,10 +357,10 @@
     <ClCompile Include="..\core\editing\snippet_template.ixx">
       <PrecompiledHeader>NotUsing</PrecompiledHeader>
     </ClCompile>
-    <ClCompile Include="..\core\query\document_symbols.ixx">
+    <ClCompile Include="..\markdown\query\document_symbols.ixx">
       <PrecompiledHeader>NotUsing</PrecompiledHeader>
     </ClCompile>
-    <ClCompile Include="..\core\query\document_text.ixx">
+    <ClCompile Include="..\markdown\query\document_text.ixx">
       <PrecompiledHeader>NotUsing</PrecompiledHeader>
     </ClCompile>
     <ClCompile Include="..\core\query\table_selection.ixx">
@@ -417,34 +448,34 @@
     <ClCompile Include="..\core\model\extension.ixx">
       <PrecompiledHeader>NotUsing</PrecompiledHeader>
     </ClCompile>
-    <ClCompile Include="..\core\model\ids.ixx">
+    <ClCompile Include="..\markdown\model\ids.ixx">
       <PrecompiledHeader>NotUsing</PrecompiledHeader>
     </ClCompile>
     <ClCompile Include="..\core\editing\input.ixx">
       <PrecompiledHeader>NotUsing</PrecompiledHeader>
     </ClCompile>
-    <ClCompile Include="..\core\support\instrumentation.ixx">
+    <ClCompile Include="..\markdown\support\instrumentation.ixx">
       <PrecompiledHeader>NotUsing</PrecompiledHeader>
     </ClCompile>
     <ClCompile Include="..\core\support\image_metadata.ixx">
       <PrecompiledHeader>NotUsing</PrecompiledHeader>
     </ClCompile>
-    <ClCompile Include="..\core\model\image_dimension.ixx">
+    <ClCompile Include="..\markdown\model\image_dimension.ixx">
       <PrecompiledHeader>NotUsing</PrecompiledHeader>
     </ClCompile>
-    <ClCompile Include="..\core\model\inline_cst.ixx">
+    <ClCompile Include="..\markdown\model\inline_cst.ixx">
       <PrecompiledHeader>NotUsing</PrecompiledHeader>
     </ClCompile>
-    <ClCompile Include="..\core\model\inline_document.ixx">
+    <ClCompile Include="..\markdown\model\inline_document.ixx">
       <PrecompiledHeader>NotUsing</PrecompiledHeader>
     </ClCompile>
-    <ClCompile Include="..\core\parsing\link_label.ixx">
+    <ClCompile Include="..\markdown\parsing\link_label.ixx">
       <PrecompiledHeader>NotUsing</PrecompiledHeader>
     </ClCompile>
-    <ClCompile Include="..\core\support\html_entities.ixx">
+    <ClCompile Include="..\markdown\support\html_entities.ixx">
       <PrecompiledHeader>NotUsing</PrecompiledHeader>
     </ClCompile>
-    <ClCompile Include="..\core\parsing\inline_parser.ixx">
+    <ClCompile Include="..\markdown\parsing\inline_parser.ixx">
       <PrecompiledHeader>NotUsing</PrecompiledHeader>
     </ClCompile>
     <ClCompile Include="..\core\editing\inline_source_edit.ixx">
@@ -453,13 +484,37 @@
     <ClCompile Include="..\core\rendering\layout_plan.ixx">
       <PrecompiledHeader>NotUsing</PrecompiledHeader>
     </ClCompile>
-    <ClCompile Include="..\core\model\metadata.ixx">
+    <ClCompile Include="..\markdown\model\metadata.ixx">
       <PrecompiledHeader>NotUsing</PrecompiledHeader>
     </ClCompile>
-    <ClCompile Include="..\core\query\outline.ixx">
+    <ClCompile Include="..\markdown\query\outline.ixx">
       <PrecompiledHeader>NotUsing</PrecompiledHeader>
     </ClCompile>
-    <ClCompile Include="..\core\parsing\parser.ixx">
+    <ClCompile Include="..\markdown\parsing\serializer_writer.ixx">
+      <PrecompiledHeader>NotUsing</PrecompiledHeader>
+    </ClCompile>
+    <ClCompile Include="..\markdown\parsing\serializer_visitor.ixx">
+      <PrecompiledHeader>NotUsing</PrecompiledHeader>
+    </ClCompile>
+    <ClCompile Include="..\markdown\parsing\parser_source_session.ixx">
+      <PrecompiledHeader>NotUsing</PrecompiledHeader>
+    </ClCompile>
+    <ClCompile Include="..\markdown\parsing\parser_leaf_line_view.ixx">
+      <PrecompiledHeader>NotUsing</PrecompiledHeader>
+    </ClCompile>
+    <ClCompile Include="..\markdown\parsing\parser_html_source_view.ixx">
+      <PrecompiledHeader>NotUsing</PrecompiledHeader>
+    </ClCompile>
+    <ClCompile Include="..\markdown\parsing\parser_code_math_leaf_source.ixx">
+      <PrecompiledHeader>NotUsing</PrecompiledHeader>
+    </ClCompile>
+    <ClCompile Include="..\markdown\parsing\image_block_promotion.ixx">
+      <PrecompiledHeader>NotUsing</PrecompiledHeader>
+    </ClCompile>
+    <ClCompile Include="..\markdown\parsing\gfm_autolink.ixx">
+      <PrecompiledHeader>NotUsing</PrecompiledHeader>
+    </ClCompile>
+    <ClCompile Include="..\markdown\parsing\parser.ixx">
       <PrecompiledHeader>NotUsing</PrecompiledHeader>
     </ClCompile>
     <ClCompile Include="..\core\rendering\html_inline_presentation.ixx">
@@ -480,31 +535,46 @@
     <ClCompile Include="..\core\source\source_editor.ixx">
       <PrecompiledHeader>NotUsing</PrecompiledHeader>
     </ClCompile>
+    <ClCompile Include="..\core\source\source_patch.ixx">
+      <PrecompiledHeader>NotUsing</PrecompiledHeader>
+    </ClCompile>
+    <ClCompile Include="..\core\source\source_projection.ixx">
+      <PrecompiledHeader>NotUsing</PrecompiledHeader>
+    </ClCompile>
+    <ClCompile Include="..\core\source\source_patch_adapter.ixx">
+      <PrecompiledHeader>NotUsing</PrecompiledHeader>
+    </ClCompile>
+    <ClCompile Include="..\core\query\document_references.ixx">
+      <PrecompiledHeader>NotUsing</PrecompiledHeader>
+    </ClCompile>
     <ClCompile Include="..\core\source\source_render.ixx">
       <PrecompiledHeader>NotUsing</PrecompiledHeader>
     </ClCompile>
-    <ClCompile Include="..\core\editing\selection.ixx">
+    <ClCompile Include="..\markdown\model\selection.ixx">
       <PrecompiledHeader>NotUsing</PrecompiledHeader>
     </ClCompile>
-    <ClCompile Include="..\core\parsing\serializer.ixx">
+    <ClCompile Include="..\markdown\parsing\serializer.ixx">
       <PrecompiledHeader>NotUsing</PrecompiledHeader>
     </ClCompile>
-    <ClCompile Include="..\core\parsing\slug.ixx">
+    <ClCompile Include="..\markdown\parsing\slug.ixx">
       <PrecompiledHeader>NotUsing</PrecompiledHeader>
     </ClCompile>
-    <ClCompile Include="..\core\model\symbols.ixx">
+    <ClCompile Include="..\markdown\model\symbols.ixx">
       <PrecompiledHeader>NotUsing</PrecompiledHeader>
     </ClCompile>
     <ClCompile Include="..\core\rendering\theme.ixx">
       <PrecompiledHeader>NotUsing</PrecompiledHeader>
     </ClCompile>
-    <ClCompile Include="..\core\editing\text_edit.ixx">
+    <ClCompile Include="..\core\rendering\syntax_marker.ixx">
+      <PrecompiledHeader>NotUsing</PrecompiledHeader>
+    </ClCompile>
+    <ClCompile Include="..\markdown\model\text_edit.ixx">
       <PrecompiledHeader>NotUsing</PrecompiledHeader>
     </ClCompile>
     <ClCompile Include="..\core\support\types.ixx">
       <PrecompiledHeader>NotUsing</PrecompiledHeader>
     </ClCompile>
-    <ClCompile Include="..\core\support\utf.ixx">
+    <ClCompile Include="..\markdown\support\utf.ixx">
       <PrecompiledHeader>NotUsing</PrecompiledHeader>
     </ClCompile>
     <ClCompile Include="pch.cpp">
@@ -548,20 +618,25 @@
       <ClCompile Include="editor\rendering\EditorViewportMaterializer.cpp" />
       <ClCompile Include="editor\rendering\EditorPreparedDocumentCache.cpp" />
       <ClCompile Include="editor\rendering\EditorPreparedDocumentRetention.cpp" />
+    <ClCompile Include="editor\rendering\EditorMathPreview.cpp" />
     <ClCompile Include="editor\rendering\EditorDocumentRenderPass.cpp" />
     <ClCompile Include="editor\rendering\EditorContentUtilities.cpp" />
     <ClCompile Include="editor\rendering\EditorInlineObjects.cpp" />
     <ClCompile Include="editor\rendering\EditorBlockContentPreparation.cpp" />
     <ClCompile Include="editor\rendering\EditorRenderResources.cpp" />
     <ClCompile Include="editor\rendering\EditorRenderCache.cpp" />
-    <ClCompile Include="editor\rendering\EditorRenderCache.Images.cpp" />
+    <ClCompile Include="editor\rendering\EditorImageCache.cpp" />
+    <ClCompile Include="media\ImageSource.cpp" />
+    <ClCompile Include="media\ImageResourceCache.cpp" />
     <ClCompile Include="editor\rendering\EditorRenderCache.Layout.cpp" />
     <ClCompile Include="editor\rendering\EditorSvgPainter.cpp" />
+    <ClCompile Include="editor\rendering\EditorSyntaxIcons.cpp" />
     <ClCompile Include="editor\rendering\EditorTextLayoutEngine.cpp" />
     <ClCompile Include="editor\interaction\EditorTableInteraction.cpp" />
     <ClCompile Include="editor\rendering\EditorInlineImageRenderer.cpp" />
     <ClCompile Include="editor\rendering\EditorTableBlockRenderer.cpp" />
     <ClCompile Include="editor\interaction\EditorFrameScheduler.cpp" />
+    <ClCompile Include="editor\interaction\EditorAnimationController.cpp" />
     <ClCompile Include="editor\interaction\EditorSelectionDrag.cpp" />
     <ClCompile Include="editor\interaction\EditorScrollController.cpp" />
     <ClCompile Include="editor\interaction\EditorTextInputController.cpp" />
@@ -571,6 +646,19 @@
     <ClCompile Include="editor\interaction\EditorLatexCompletionController.cpp" />
     <ClCompile Include="editor\interaction\EditorCodeLanguageController.cpp" />
     <ClCompile Include="editor\interaction\EditorDocumentController.cpp" />
+    <ClCompile Include="workspace\WorkspaceDocuments.cpp" />
+    <ClCompile Include="workspace\WorkspaceIcons.cpp" />
+    <ClCompile Include="workspace\WorkspaceFileOperations.cpp" />
+    <ClCompile Include="workspace\FolderExplorerView.cpp" />
+    <ClCompile Include="workspace\FolderExplorerController.Editing.cpp" />
+    <ClCompile Include="workspace\FolderExplorerController.DragDrop.cpp" />
+    <ClCompile Include="workspace\WorkspaceFileCoordinator.cpp" />
+    <ClCompile Include="workspace\FolderExplorerController.cpp" />
+    <ClCompile Include="editor\interaction\EditorDocumentController.Relocation.cpp" />
+    <ClCompile Include="editor\interaction\EditorDocumentController.Save.cpp" />
+    <ClCompile Include="editor\interaction\EditorDocumentController.Clipboard.cpp" />
+    <ClCompile Include="storage\ClipboardImageStore.cpp" />
+    <ClCompile Include="MainWindow.Lifecycle.cpp" />
     <ClCompile Include="editor\interaction\EditorDocumentController.Reload.cpp" />
     <ClCompile Include="storage\DocumentEncodingService.cpp">
       <PrecompiledHeader>NotUsing</PrecompiledHeader>
@@ -594,6 +682,21 @@
     <ClCompile Include="media\SvgNormalizer.cpp" />
     <ClCompile Include="media\TreeSitterHighlighter.cpp">
       <AdditionalIncludeDirectories>..\..\third_party\tree-sitter\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+    </ClCompile>
+    <ClCompile Include="..\math\editor\syntax.ixx">
+      <PrecompiledHeader>NotUsing</PrecompiledHeader>
+      <ObjectFileName>$(IntDir)math_editor_syntax_module.obj</ObjectFileName>
+    </ClCompile>
+    <ClCompile Include="..\math\editor\syntax.cpp">
+      <PrecompiledHeader>NotUsing</PrecompiledHeader>
+      <AdditionalIncludeDirectories>..\..\third_party\tree-sitter\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <ObjectFileName>$(IntDir)math_editor_syntax.obj</ObjectFileName>
+    </ClCompile>
+    <ClCompile Include="..\math\editor\tree-sitter\src\parser.c">
+      <PrecompiledHeader>NotUsing</PrecompiledHeader>
+      <CompileAs>CompileAsC</CompileAs>
+      <AdditionalIncludeDirectories>..\..\third_party\tree-sitter\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <ObjectFileName>$(IntDir)math_editor_parser.obj</ObjectFileName>
     </ClCompile>
     <ClCompile Include="..\..\third_party\tree-sitter\runtime\lib.c">
       <PrecompiledHeader>NotUsing</PrecompiledHeader>
@@ -620,6 +723,17 @@
     <ClCompile Include="MainWindow.Events.cpp" />
     <ClCompile Include="MainWindow.Encoding.cpp" />
     <ClCompile Include="MainWindow.Commands.cpp" />
+    <ClCompile Include="MainWindow.Documents.cpp" />
+    <ClCompile Include="MainWindow.Tabs.cpp" />
+    <ClCompile Include="MainWindow.TabTransfer.cpp" />
+    <ClCompile Include="App.Windows.cpp" />
+    <ClCompile Include="workspace\WorkspaceLaunch.cpp" />
+    <ClInclude Include="workspace\WorkspaceLaunch.h" />
+    <ClCompile Include="editor\rendering\EditorPopupShadow.cpp" />
+    <ClCompile Include="editor\rendering\EditorMathSyntax.cpp" />
+    <ClCompile Include="editor\rendering\EditorCaretAnimation.cpp" />
+    <ClCompile Include="MainWindow.Folders.cpp" />
+    <ClCompile Include="MainWindow.Shortcuts.cpp" />
     <ClCompile Include="MainWindow.Settings.cpp" />
     <ClCompile Include="$(GeneratedFilesDir)module.g.cpp" />
   </ItemGroup>

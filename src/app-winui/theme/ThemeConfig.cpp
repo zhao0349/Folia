@@ -2,6 +2,7 @@
 #include "theme/ThemeConfig.h"
 #include "localization/Localization.h"
 #include "storage/AssetPaths.h"
+#include <winrt/Windows.Data.Xml.Dom.h>
 
 namespace
 {
@@ -193,13 +194,37 @@ namespace
         });
     }
 
+    std::shared_ptr<const folia::SyntaxMarkerTheme> ParseSyntaxMarkers(JsonObject const& object)
+    {
+        auto markers = std::make_shared<folia::SyntaxMarkerTheme>();
+        markers->size_em = Number(object, L"sizeEm");
+        markers->gap_em = Number(object, L"gapEm");
+        if (markers->size_em <= 0) throw std::runtime_error("syntax marker size must be positive");
+        auto icons = object.GetNamedObject(L"icons");
+        for (std::size_t i = 1; i < folia::syntax_marker_names.size(); ++i)
+        {
+            auto source = icons.GetNamedString(winrt::to_hstring(folia::syntax_marker_names[i]));
+            auto utf8 = winrt::to_string(source);
+            if (utf8.empty() || utf8.size() > 65536)
+                throw std::runtime_error("each syntax marker must contain an SVG of at most 64 KiB");
+            winrt::Windows::Data::Xml::Dom::XmlDocument svg;
+            svg.LoadXml(source);
+            auto root = svg.DocumentElement();
+            if (!root || root.NodeName() != L"svg" || root.GetAttribute(L"viewBox") != L"0 0 24 24"
+                || svg.GetElementsByTagName(L"text").Length() || svg.GetElementsByTagName(L"image").Length())
+                throw std::runtime_error("syntax markers require vector SVG with viewBox 0 0 24 24");
+            markers->svg[i] = std::move(utf8);
+        }
+        return markers;
+    }
+
     folia::ThemeProfile ParseProfile(std::string const& source)
     {
         auto root = JsonObject::Parse(winrt::to_hstring(source));
         folia::ThemeProfile profile;
         auto schema = root.GetNamedNumber(L"schemaVersion");
-        if (schema != 1.0) throw std::runtime_error("unsupported theme schema version");
-        profile.schema_version = 1;
+        if (schema != 2.0) throw std::runtime_error("unsupported theme schema version (expected 2)");
+        profile.schema_version = 2;
         profile.id = winrt::to_string(root.GetNamedString(L"id"));
         profile.name = winrt::to_string(root.GetNamedString(L"name"));
         profile.variant = ParseVariant(root.GetNamedString(L"variant"));
@@ -208,12 +233,67 @@ namespace
         profile.typography = ParseTypography(root.GetNamedObject(L"typography"));
         profile.colors = ParseColors(root.GetNamedObject(L"colors"));
         profile.layout = ParseLayout(root.GetNamedObject(L"layout"));
+        if (root.HasKey(L"editor")) {
+            auto object = root.GetNamedObject(L"editor");
+            struct Field { wchar_t const* name; float folia::ThemeEditor::* value; };
+            static constexpr Field fields[] = {
+                {L"caretWidth", &folia::ThemeEditor::caret_width},
+                {L"caretMoveMs", &folia::ThemeEditor::caret_move_ms},
+                {L"caretFadeMs", &folia::ThemeEditor::caret_fade_ms},
+                {L"bracketBorderWidth", &folia::ThemeEditor::bracket_border_width},
+            };
+            for (auto const& field : fields)
+                if (object.HasKey(field.name)) profile.editor.*field.value = Number(object, field.name);
+            if (object.HasKey(L"bracketMatchBackground")) profile.editor.bracket_match_background = ParseColor(object.GetNamedString(L"bracketMatchBackground"));
+            if (object.HasKey(L"bracketMatchBorder")) profile.editor.bracket_match_border = ParseColor(object.GetNamedString(L"bracketMatchBorder"));
+            if (object.HasKey(L"bracketUnmatchedBackground")) profile.editor.bracket_unmatched_background = ParseColor(object.GetNamedString(L"bracketUnmatchedBackground"));
+            if (object.HasKey(L"bracketUnmatchedBorder")) profile.editor.bracket_unmatched_border = ParseColor(object.GetNamedString(L"bracketUnmatchedBorder"));
+        }
+        if (profile.variant == folia::Theme::HighContrast) profile.math_preview.shadow_color.a = 0;
+        if (root.HasKey(L"mathPreview")) {
+            auto object = root.GetNamedObject(L"mathPreview");
+            auto& preview = profile.math_preview;
+            struct Field { wchar_t const* name; float folia::ThemeMathPreview::* value; };
+            static constexpr Field fields[] = {
+                {L"margin", &folia::ThemeMathPreview::margin}, {L"gap", &folia::ThemeMathPreview::gap},
+                {L"paddingHorizontal", &folia::ThemeMathPreview::padding_horizontal},
+                {L"paddingVertical", &folia::ThemeMathPreview::padding_vertical},
+                {L"cornerRadius", &folia::ThemeMathPreview::corner_radius},
+                {L"shadowBlur", &folia::ThemeMathPreview::shadow_blur},
+                {L"shadowOffsetY", &folia::ThemeMathPreview::shadow_offset_y},
+            };
+            for (auto const& field : fields)
+                if (object.HasKey(field.name)) preview.*field.value = Number(object, field.name);
+            if (object.HasKey(L"shadowColor")) preview.shadow_color = ParseColor(object.GetNamedString(L"shadowColor"));
+        }
+        profile.syntax_markers = ParseSyntaxMarkers(root.GetNamedObject(L"syntaxMarkers"));
         return profile;
     }
 }
 
 namespace winrt::Folia
 {
+    std::shared_ptr<const folia::SyntaxMarkerTheme> DefaultSyntaxMarkerTheme()
+    {
+        // Only the complete built-in fail-safe profile uses executable assets.
+        // Normal and imported theme files carry their own complete SVG set.
+        static auto const markers = [] {
+            auto result = std::make_shared<folia::SyntaxMarkerTheme>();
+            for (std::size_t i = 1; i < folia::syntax_marker_names.size(); ++i)
+            {
+                std::string name = "FOLIA_MARKER_";
+                for (auto ch : folia::syntax_marker_names[i]) name += static_cast<char>(std::toupper(static_cast<unsigned char>(ch)));
+                auto resource = FindResourceW(nullptr, winrt::to_hstring(name).c_str(), RT_RCDATA);
+                winrt::check_bool(resource != nullptr);
+                auto bytes = LockResource(LoadResource(nullptr, resource));
+                winrt::check_bool(bytes != nullptr);
+                result->svg[i].assign(static_cast<char const*>(bytes), SizeofResource(nullptr, resource));
+            }
+            return result;
+        }();
+        return markers;
+    }
+
     std::filesystem::path BuiltinThemeDirectory()
     {
         return AssetPath(L"themes");
@@ -249,6 +329,8 @@ namespace winrt::Folia
             ? Localize(L"ThemeVariantMismatch")
             : loaded.diagnostic;
         auto diagnostic = LocalizeFormat(L"ThemeFallback", { reason });
-        return { folia::default_theme_profile(variant), false, std::move(diagnostic) };
+        auto fallback = folia::default_theme_profile(variant);
+        fallback.syntax_markers = DefaultSyntaxMarkerTheme();
+        return { std::move(fallback), false, std::move(diagnostic) };
     }
 }

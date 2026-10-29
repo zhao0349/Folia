@@ -1,6 +1,7 @@
 // folia.core.theme — platform-independent theme model and built-in fail-safe profiles.
 export module folia.core.theme;
 import std;
+export import folia.core.syntax_marker;
 
 export namespace folia {
 
@@ -115,14 +116,40 @@ struct ThemeLayout {
     float footnote_preview_spacing = 8.0f;
 };
 
+struct ThemeMathPreview {
+    float margin = 12.0f;
+    float gap = 8.0f;
+    float padding_horizontal = 12.0f;
+    float padding_vertical = 10.0f;
+    float corner_radius = 8.0f;
+    float shadow_blur = 8.0f;
+    float shadow_offset_y = 2.0f;
+    Color shadow_color{0, 0, 0, 24};
+};
+
+struct ThemeEditor {
+    float caret_width = 1.5f;
+    float caret_move_ms = 110.f;
+    float caret_fade_ms = 100.f;
+    float bracket_border_width = 1.f;
+    Color bracket_match_background{0, 100, 0, 26};
+    Color bracket_match_border{185, 185, 185};
+    Color bracket_unmatched_background{160, 128, 90, 20};
+    Color bracket_unmatched_border{160, 128, 90, 128};
+    friend bool operator==(ThemeEditor const&, ThemeEditor const&) = default;
+};
+
 struct ThemeProfile {
-    std::uint32_t schema_version = 1;
+    std::uint32_t schema_version = 2;
     std::string id;
     std::string name;
     Theme variant = Theme::Dark;
     ThemeTypography typography;
     ThemeColors colors;
     ThemeLayout layout;
+    ThemeMathPreview math_preview;
+    ThemeEditor editor;
+    std::shared_ptr<const SyntaxMarkerTheme> syntax_markers;
 };
 
 namespace detail {
@@ -144,6 +171,7 @@ inline ThemeProfile dark_profile() {
     profile.id = "folia.dark";
     profile.name = "Folia Dark";
     profile.variant = Theme::Dark;
+    profile.editor.bracket_match_border = Color(136, 136, 136);
     profile.typography = default_typography();
     auto& t = profile.colors;
     t.bg = Color(18, 20, 25); t.fg = Color(228, 232, 240); t.muted_fg = Color(139, 149, 170);
@@ -210,6 +238,9 @@ inline ThemeProfile high_contrast_profile() {
     profile.id = "folia.high-contrast";
     profile.name = "Folia High Contrast";
     profile.variant = Theme::HighContrast;
+    profile.editor.bracket_match_background.a = 0;
+    profile.editor.bracket_match_border = Color(255, 255, 255);
+    profile.math_preview.shadow_color.a = 0;
     auto& t = profile.colors;
     t.bg = Color(0, 0, 0); t.fg = Color(255, 255, 255); t.muted_fg = Color(220, 220, 220);
     t.accent_fg = Color(0, 255, 255); t.heading_fg = Color(255, 255, 0); t.strong_fg = t.fg; t.emphasis_fg = Color(255, 165, 0);

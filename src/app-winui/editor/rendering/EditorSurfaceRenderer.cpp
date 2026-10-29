@@ -36,6 +36,7 @@ namespace winrt::Folia
 
     void EditorSurfaceRenderer::ResetDocumentCaches()
     {
+        caretAnimation.Reset();
         mathJax.Clear();
         AttachMathCompletion();
         mathModelRevision.reset();
@@ -47,7 +48,30 @@ namespace winrt::Folia
 
     void EditorSurfaceRenderer::ClearPreparedDocument()
     {
+        inlineMathPreviewBounds.reset();
         preparedDocument.reset();
+    }
+
+    MathJaxRenderer EditorSurfaceRenderer::TakeMathCache()
+    {
+        mathJax.SetCompletionCallback({});
+        mathJax.SetVisibleSvgIds({});
+        mathJax.CancelOffscreenRenders({});
+        auto cache = std::move(mathJax);
+        ResetDocumentCaches();
+        interactionMap.Clear();
+        nonInteractiveRegions.clear();
+        ClearPointer();
+        SetTableDrag({}, {});
+        return cache;
+    }
+
+    void EditorSurfaceRenderer::RestoreMathCache(MathJaxRenderer cache)
+    {
+        ResetDocumentCaches();
+        mathJax = std::move(cache);
+        mathJax.SetPreparationStopToken(mathPreparationStop);
+        AttachMathCompletion();
     }
 
     void EditorSurfaceRenderer::SetInvalidateCallback(std::function<void()> callback)
@@ -58,33 +82,73 @@ namespace winrt::Folia
 
     void EditorSurfaceRenderer::AttachMathCompletion()
     {
-        if (!mathDispatcher) return;
+        mathJax.SetCompletionCallback(EmbeddedCompletionCallback());
+    }
+
+    std::function<void()> EditorSurfaceRenderer::EmbeddedCompletionCallback()
+    {
+        if (!mathDispatcher) return {};
         std::weak_ptr<InvalidationState> weak = invalidationState;
-        mathJax.SetCompletionCallback([weak, dispatcher = mathDispatcher, this]
+        return [weak, dispatcher = mathDispatcher, this]
         {
-            dispatcher.TryEnqueue([weak, this]
+            auto state = weak.lock();
+            if (!state) return;
             {
-                auto state = weak.lock();
-                if (!state) return;
+                std::scoped_lock lock(state->mutex);
+                if (!state->active || state->embeddedQueued) return;
+                state->embeddedQueued = true;
+            }
+            if (!dispatcher.TryEnqueue(
+                winrt::Microsoft::UI::Dispatching::DispatcherQueuePriority::Low,
+                [weak, this]
+            {
+                auto current = weak.lock();
+                if (!current) return;
                 {
-                    std::scoped_lock lock(state->mutex);
-                    if (!state->active) return;
+                    std::scoped_lock lock(current->mutex);
+                    current->embeddedQueued = false;
+                    if (!current->active) return;
                 }
                 ++embeddedGeneration;
                 Invalidate();
-            });
-        });
+            }))
+            {
+                std::scoped_lock lock(state->mutex);
+                state->embeddedQueued = false;
+            }
+        };
     }
 
     void EditorSurfaceRenderer::Invalidate()
     {
         if (rendering || exporting) { deferredInvalidate = true; return; }
-        std::function<void()> callback;
+        if (!mathDispatcher) return; // Offscreen exporters have no UI to repaint.
+        auto state = invalidationState;
         {
-            std::scoped_lock lock(invalidationState->mutex);
-            if (invalidationState->active) callback = invalidationState->callback;
+            std::scoped_lock lock(state->mutex);
+            if (!state->active || !state->callback || state->repaintQueued) return;
+            state->repaintQueued = true;
         }
-        if (callback) callback();
+        // A frame budget must yield to input, including the scrollbar release.
+        // Never resume drawing recursively from a Render scope destructor.
+        if (!mathDispatcher.TryEnqueue(
+            winrt::Microsoft::UI::Dispatching::DispatcherQueuePriority::Low,
+            [weak = std::weak_ptr<InvalidationState>{state}]
+        {
+            auto current = weak.lock();
+            if (!current) return;
+            std::function<void()> callback;
+            {
+                std::scoped_lock lock(current->mutex);
+                current->repaintQueued = false;
+                if (current->active) callback = current->callback;
+            }
+            if (callback) callback();
+        }))
+        {
+            std::scoped_lock lock(state->mutex);
+            state->repaintQueued = false;
+        }
     }
 
     void EditorSurfaceRenderer::Initialize(winrt::Microsoft::UI::Xaml::Controls::SwapChainPanel const& panel)
@@ -95,16 +159,7 @@ namespace winrt::Folia
         mathDispatcher = dispatcher;
         AttachMathCompletion();
         renderCache.Attach(dispatcher, [this] { Invalidate(); });
-        auto completion = [this, dispatcher]
-        {
-            if (embeddedCompletionPending.exchange(true)) return;
-            if (!dispatcher.TryEnqueue([this]
-                {
-                    embeddedCompletionPending = false;
-                    ++embeddedGeneration;
-                    Invalidate();
-                })) embeddedCompletionPending = false;
-        };
+        auto completion = EmbeddedCompletionCallback();
         svgNormalizer.SetCompletionCallback(completion);
         mermaid.SetCompletionCallback(std::move(completion));
     }
@@ -143,7 +198,7 @@ namespace winrt::Folia
 
     void EditorSurfaceRenderer::Render(detail::EditorRenderFrame const& frame)
     {
-        if (!resources.Ready()) return;
+        if (!resources.Ready()) { caretAnimation.Reset(); return; }
         if (resizing || rendering)
         {
             // A source edit may request a frame while an embedded-content
@@ -167,12 +222,16 @@ namespace winrt::Folia
             // Synchronous native/file preparation can report an error. Close
             // the drawing transaction so the next frame can still render.
             resources.d2dContext->EndDraw();
+            caretAnimation.Reset();
             throw;
         }
         auto ended = resources.d2dContext->EndDraw();
-        if (ended == D2DERR_RECREATE_TARGET) { resources.ResetTargets(); return; }
-        if (FAILED(ended)) return;
+        if (ended == D2DERR_RECREATE_TARGET) { caretAnimation.Reset(); resources.ResetTargets(); return; }
+        if (FAILED(ended)) { caretAnimation.Reset(); return; }
         auto presented = resources.swapChain->Present(0, 0);
-        if (presented == DXGI_ERROR_DEVICE_REMOVED || presented == DXGI_ERROR_DEVICE_RESET) resources.ResetTargets();
+        if (presented == DXGI_ERROR_DEVICE_REMOVED || presented == DXGI_ERROR_DEVICE_RESET) {
+            caretAnimation.Reset();
+            resources.ResetTargets();
+        }
     }
 }

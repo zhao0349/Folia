@@ -9,14 +9,14 @@
 #include <vector>
 
 #include "support/folia_test.hpp"
-import folia.core.dialect;
-import folia.core.inline_cst;
-import folia.core.inline_document;
-import folia.core.inline_parser;
+import folia.markdown.dialect;
+import folia.markdown.inline_cst;
+import folia.markdown.inline_document;
+import folia.markdown.inline_parser;
 import folia.core.inline_source_edit;
-import folia.core.selection;
-import folia.core.text_edit;
-import folia.core.utf;
+import folia.markdown.selection;
+import folia.markdown.text_edit;
+import folia.markdown.utf;
 
 using namespace folia;
 using namespace boost::ut;
@@ -461,7 +461,7 @@ suite inline_cst_tests = [] {
     expect(first_html_node(document.tree.nodes, "strong") != nullptr);
 };
 
-"inline_html_is_a_recursive_lossless_syntax_island"_test = [] {
+"inline_html_retains_recursive_cst_and_surrounding_markdown_syntax"_test = [] {
     const auto source = std::u32string{
         U"**outside** <span STYLE=\"color:#f00\" onclick=\"ignored()\">"
         U"**literal** $literal$ <strong>bold <em>*still literal*</em></strong>"
@@ -472,9 +472,9 @@ suite inline_cst_tests = [] {
     const auto* span = first_html_node(tree.nodes, "span");
     expect(fatal(bool(span != nullptr)));
     if (!span) return;
-    expect(!contains_kind(span->children, InlineCstKind::Strong));
-    expect(!contains_kind(span->children, InlineCstKind::Emphasis));
-    expect(!contains_kind(span->children, InlineCstKind::InlineMath));
+    expect(contains_kind(span->children, InlineCstKind::Strong));
+    expect(contains_kind(span->children, InlineCstKind::Emphasis));
+    expect(contains_kind(span->children, InlineCstKind::InlineMath));
     expect(first_html_node(span->children, "strong") != nullptr);
     expect(first_html_node(span->children, "em") != nullptr);
     expect(span->semantics().html_attributes.contains("style"));
@@ -543,7 +543,9 @@ suite inline_cst_tests = [] {
 "html_text_islands_hide_nested_comments_without_enabling_markdown"_test = [] {
     const auto source = std::u32string{
         U"<span>*literal*<!-- hidden --><strong>visible</strong></span>"};
-    const auto tree = parse_inline(source, test_context());
+    auto context = test_context();
+    context.syntax_mode = InlineSyntaxMode::HtmlText;
+    const auto tree = parse_inline(source, context);
     expect(fatal(is_lossless(source)));
     const auto* span = first_html_node(tree.nodes, "span");
     expect(fatal(span != nullptr));

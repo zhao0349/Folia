@@ -3,23 +3,23 @@
 export module folia.core.render_builder;
 import std;
 import folia.core.types;
-import folia.core.ids;
-import folia.core.dialect;
-import folia.core.ast;
-import folia.core.block_source;
-import folia.core.block_tree;
-import folia.core.callout;
-import folia.core.inline_cst;
-import folia.core.inline_document;
-import folia.core.instrumentation;
-import folia.core.selection;
-import folia.core.text_edit;
-import folia.core.document;
-import folia.core.document_text;
-import folia.core.symbols;
-import folia.core.outline;
-import folia.core.diagnostics;
-import folia.core.utf;
+import folia.markdown.ids;
+import folia.markdown.dialect;
+import folia.markdown.ast;
+import folia.markdown.block_source;
+import folia.markdown.block_tree;
+import folia.markdown.callout;
+import folia.markdown.inline_cst;
+import folia.markdown.inline_document;
+import folia.markdown.instrumentation;
+import folia.markdown.selection;
+import folia.markdown.text_edit;
+import folia.markdown.document;
+import folia.markdown.document_text;
+import folia.markdown.symbols;
+import folia.markdown.outline;
+import folia.markdown.diagnostics;
+import folia.markdown.utf;
 import folia.core.render_model;
 import folia.core.html_inline_presentation;
 import folia.core.html_inline_flow;
@@ -337,7 +337,8 @@ struct Builder {
                     display_range.start,
                     display_range.length()),
                 {block.id, {source_start, source_end}});
-            item.style.code = true;
+            replace_inline_display_nuls(item.text);
+            item.style.code = CodeStyle::Block;
             out.push_back(std::move(item));
             first_line = false;
         }
@@ -348,7 +349,12 @@ struct Builder {
     };
 
     std::size_t list_marker_columns(const BlockNode& list, std::size_t index) const {
-        if (list.kind == BlockKind::TaskList) return 6;
+        if (index < list.children.size()
+            && list.children[index].kind == BlockKind::TaskListItem) {
+            return list.list_special().ordered
+                ? std::to_string(list.list_special().start + index).size() + 6
+                : 6;
+        }
         if (list.list_special().ordered) return std::to_string(list.list_special().start + index).size() + 2;
         return 2;
     }
@@ -450,9 +456,9 @@ struct Builder {
             case BlockKind::List:
             case BlockKind::TaskList: {
                 auto rendered = make_flow_container(block, context, parent_indent_columns);
-                const bool tasks = block.kind == BlockKind::TaskList;
                 for (std::size_t index = 0; index < block.children.size(); ++index) {
                     auto const& item = block.children[index];
+                    const bool task_item = item.kind == BlockKind::TaskListItem;
                     auto item_owner = list_item_marker_owner(item);
                     if (index > 0) {
                         auto previous = last_editable_position(block.children[index - 1])
@@ -461,7 +467,9 @@ struct Builder {
                     }
                     auto marker = item.item_special().marker;
                     if (marker.empty()) {
-                        if (tasks) marker = item.item_special().checked ? U"- [x] " : U"- [ ] ";
+                        if (task_item) {
+                            marker = item.item_special().checked ? U"- [x] " : U"- [ ] ";
+                        }
                         else if (block.list_special().ordered) marker = utf8_to_cps(std::to_string(block.list_special().start + index)) + std::u32string(1, block.list_special().delimiter) + U" ";
                         else marker = U"- ";
                     }
@@ -469,7 +477,7 @@ struct Builder {
                     auto missing_indent = context.indent_columns > (index == 0 ? emitted_columns : 0)
                         ? context.indent_columns - (index == 0 ? emitted_columns : 0)
                         : 0;
-                    auto display_marker = tasks
+                    auto display_marker = task_item
                         ? marker
                         : block.list_special().ordered
                             ? utf8_to_cps(std::to_string(block.list_special().start + index)) + std::u32string(1, block.list_special().delimiter) + U" "
@@ -480,10 +488,10 @@ struct Builder {
                         item_owner,
                         cursor,
                         marker,
-                        tasks ? MarkerRole::TaskCheckbox : block.list_special().ordered ? MarkerRole::ListNumber : MarkerRole::ListBullet,
+                        task_item ? MarkerRole::TaskCheckbox : block.list_special().ordered ? MarkerRole::ListNumber : MarkerRole::ListBullet,
                         TextAffinity::Downstream,
                         std::u32string(missing_indent, U' ') + display_marker);
-                    if (tasks) out.back().ensure_special().task_checked = item.item_special().checked;
+                    if (task_item) out.back().ensure_special().task_checked = item.item_special().checked;
 
                     FlowContext item_context{context.indent_columns + marker_columns};
                     auto item_rendered = make_flow_container(item, item_context, context.indent_columns);
@@ -673,16 +681,42 @@ struct Builder {
         auto source_span = [&](SourceRange range) {
             return TextSpan{owner_id, range};
         };
+        auto delimiter_icon = [&](InlineCstNode const& node, SourceRange range) {
+            using M = SyntaxMarker;
+            using K = InlineCstKind;
+            if (node.status != ParseStatus::Complete || !node.delimiter_ranges().closing || range.empty()) return M::None;
+            switch (node.kind) {
+                case K::Emphasis: return document.source[range.start] == U'*' ? M::Star : M::Underscore;
+                case K::Strong: return document.source[range.start] == U'*' ? M::DoubleStar : M::DoubleUnderscore;
+                case K::Strikethrough: return range.length() == 1 ? M::Tilde : M::DoubleTilde;
+                case K::CodeSpan:
+                    switch (range.length()) {
+                        case 1: return M::Backtick;
+                        case 2: return M::DoubleBacktick;
+                        case 3: return M::TripleBacktick;
+                        default: return M::None;
+                    }
+                case K::InlineMath:
+                    if (node.semantics().math_delim == MathDelimiter::InlineDollar) return M::Dollar;
+                    return range == node.delimiter_ranges().opening ? M::MathOpen : M::MathClose;
+                default: return M::None;
+            }
+        };
         auto append_marker = [&](std::vector<InlineRenderItem>& target, const InlineCstNode& owner, SourceRange range) {
             if (range.empty()) return;
             InlineRenderItem marker;
             marker.kind = InlineRenderItem::Kind::Marker;
             marker.id = owner.id;
             marker.ensure_special().marker_owner = owner.id;
+            marker.ensure_special().marker_construct = owner.range;
+            marker.ensure_special().syntax_marker = delimiter_icon(owner, range);
             marker.source_span = source_span(range);
             marker.text = inline_source_slice(document, range);
             marker.ensure_special().marker_style = MarkerStyle{true, {}};
-            marker.ensure_special().visibility = MarkerVisibility::Always;
+            // Reveal exact source delimiters when editing their CST construct.
+            // Incomplete syntax remains visible so it can be finished normally.
+            marker.ensure_special().visibility = owner.status == ParseStatus::Complete
+                ? MarkerVisibility::WhenCaretInsideNode : MarkerVisibility::Always;
             target.push_back(std::move(marker));
         };
         std::function<void(const InlineCstNodes&, const InlineStyle&, std::vector<InlineRenderItem>&)> append_nodes;
@@ -740,15 +774,23 @@ struct Builder {
                     struct ProjectedCharacter {
                         char32_t value;
                         SourceRange source_range;
+                        bool hidden = false;
                     };
                     const auto content = code_node.delimiter_ranges().content;
                     const auto raw = inline_source_slice(document, content);
-                    const auto normalized = normalize_inline_code_span(raw);
+                    const auto normalized = normalize_inline_code_span(raw, document.syntax_mode);
                     std::vector<ProjectedCharacter> projected;
                     projected.reserve(raw.size());
                     for (std::size_t offset = 0; offset < raw.size(); ++offset) {
                         const auto source_start = content.start + offset;
                         const auto value = raw[offset];
+                        if (document.syntax_mode == InlineSyntaxMode::TableCell
+                            && value == U'\\' && offset + 1 < raw.size() && raw[offset + 1] == U'|') {
+                            projected.push_back({U'\\', {source_start, source_start + 1}, true});
+                            projected.push_back({U'|', {source_start + 1, source_start + 2}});
+                            ++offset;
+                            continue;
+                        }
                         if (value == U'\r') {
                             auto source_end = source_start + 1;
                             if (offset + 1 < raw.size() && raw[offset + 1] == U'\n') {
@@ -778,30 +820,48 @@ struct Builder {
                     }
 
                     auto cursor = content_start;
+                    auto display_cursor = std::size_t{0};
                     while (cursor < content_end) {
+                        if (projected[cursor].hidden) {
+                            InlineRenderItem marker;
+                            marker.kind = InlineRenderItem::Kind::Marker;
+                            marker.id = code_node.id;
+                            marker.source_span = source_span(projected[cursor].source_range);
+                            marker.text = inline_source_slice(document, projected[cursor].source_range);
+                            auto& marker_payload = marker.ensure_special();
+                            marker_payload.marker_owner = code_node.id;
+                            marker_payload.marker_role = MarkerRole::Syntax;
+                            marker_payload.marker_style = MarkerStyle{true, {}};
+                            marker_payload.visibility = MarkerVisibility::HiddenButEditable;
+                            target.push_back(std::move(marker));
+                            ++cursor;
+                            continue;
+                        }
                         if (projected[cursor].source_range.length() != 1) {
-                            const auto display_start = cursor - content_start;
                             append_text(
-                                normalized.substr(display_start, 1),
+                                normalized.substr(display_cursor, 1),
                                 projected[cursor].source_range,
                                 text_style);
                             ++cursor;
+                            ++display_cursor;
                             continue;
                         }
                         auto run_end = cursor + 1;
                         while (run_end < content_end
+                            && !projected[run_end].hidden
                             && projected[run_end].source_range.length() == 1
                             && projected[run_end - 1].source_range.end
                                 == projected[run_end].source_range.start) {
                             ++run_end;
                         }
-                        const auto display_start = cursor - content_start;
-                        auto text = normalized.substr(display_start, run_end - cursor);
+                        auto text = normalized.substr(display_cursor, run_end - cursor);
+                        const auto displayed_count = run_end - cursor;
                         append_text(
                             std::move(text),
                             {projected[cursor].source_range.start, projected[run_end - 1].source_range.end},
                             text_style);
                         cursor = run_end;
+                        display_cursor += displayed_count;
                     }
 
                     if (trim_outer_spaces) {
@@ -831,7 +891,8 @@ struct Builder {
                         break;
                     }
                     case K::CodeSpan: {
-                        auto child_style = style; child_style.code = true;
+                        auto child_style = style; child_style.code = CodeStyle::Inline;
+                        child_style.code_span_id = node.id;
                         append_marker(target, node, delim.opening);
                         append_code_span_text(node, child_style);
                         if (delim.closing) append_marker(target, node, *delim.closing);
@@ -845,10 +906,14 @@ struct Builder {
                         item.text = inline_source_slice(document, delim.content);
                         item.ensure_special().display = MathDisplayMode::Inline;
                         item.ensure_special().math_delim = semantic.math_delim;
+                        item.ensure_special().ensure_semantic().content_range = delim.content;
+                        item.ensure_special().ensure_semantic().opening_marker = delimiter_icon(node, delim.opening);
+                        if (delim.closing) item.ensure_special().ensure_semantic().closing_marker = delimiter_icon(node, *delim.closing);
                         item.style = style;
                         item.style.bold = false;
                         item.style.italic = false;
-                        item.style.code = false;
+                        item.style.code = CodeStyle::None;
+                        item.style.code_span_id = {};
                         item.style.link = false;
                         target.push_back(std::move(item));
                         break;
@@ -861,6 +926,7 @@ struct Builder {
                         item.source_span = source_span(node.range);
                         auto& special = item.ensure_special().ensure_semantic();
                         special.href = semantic.href;
+                        special.content_range = delim.content;
                         special.title = semantic.title;
                         auto child_style = style; child_style.link = true;
                         if (node.kind == K::Link) {
@@ -888,6 +954,7 @@ struct Builder {
                         auto& special = item.ensure_special().ensure_semantic();
                         special.src = semantic.href;
                         special.alt = semantic.alt;
+                        special.content_range = delim.content;
                         special.title = semantic.title;
                         special.image_width = semantic.image_width;
                         special.image_height = semantic.image_height;
@@ -938,6 +1005,8 @@ struct Builder {
                             style,
                             semantic.html_tag,
                             semantic.html_attributes);
+                        if (child_style.code == CodeStyle::Inline && style.code != CodeStyle::Inline)
+                            child_style.code_span_id = node.id;
                         append_marker(target, node, delim.opening);
                         std::vector<InlineRenderItem> html_children;
                         append_nodes(node.children, child_style, html_children);
@@ -986,7 +1055,8 @@ struct Builder {
                         break;
                     case K::Incomplete:
                         append_marker(target, node, delim.opening);
-                        if (!delim.content.empty()) append_text(inline_source_slice(document, delim.content), delim.content, style);
+                        if (!node.children.empty()) append_nodes(node.children, style, target);
+                        else if (!delim.content.empty()) append_text(inline_source_slice(document, delim.content), delim.content, style);
                         break;
                     case K::Text:
                     case K::Whitespace:
@@ -1004,6 +1074,8 @@ struct Builder {
         }
         auto attach_source = [&](auto& self, std::vector<InlineRenderItem>& items) -> void {
             for (auto& item : items) {
+                replace_inline_display_nuls(item.text);
+                if (item.payload) replace_inline_display_nuls(item.payload->display_text);
                 if (item.kind != InlineRenderItem::Kind::Text
                     && item.kind != InlineRenderItem::Kind::Marker) {
                     item.ensure_special().ensure_semantic().source_text =
@@ -1129,6 +1201,7 @@ struct Builder {
                 special.generated_code_indentation = b.block_source.tree().generated_indentation;
                 special.language = b.block_source.tree().language;
                 special.code_text = block_source_content(b.block_source);
+                replace_inline_display_nuls(special.code_text);
                 special.code_indented = b.atomic_special().code_indented;
                 special.line_count = code_presentation_lines(special.code_text).size();
                 if (!special.content_to_source.empty()) {
@@ -1143,6 +1216,22 @@ struct Builder {
                 special.content_to_source = b.block_source.tree().content_to_source;
                 special.tex = block_source_content(b.block_source);
                 special.math_delim = b.atomic_special().math_delim;
+                auto const& sourceTree = b.block_source.tree();
+                for (auto const& token : sourceTree.tokens) {
+                    auto opening = token.kind == BlockSourceTokenKind::OpeningMarker;
+                    auto closing = token.kind == BlockSourceTokenKind::ClosingMarker;
+                    if (!opening && !closing) continue;
+                    auto range = token.source_range;
+                    auto icon = SyntaxMarker::None;
+                    if (sourceTree.complete_opening && sourceTree.complete_closing) {
+                        // The block parser includes indentation in the opening
+                        // token; both math delimiter spellings have two codepoints.
+                        if (opening) range.start = range.end - 2;
+                        icon = special.math_delim == MathDelimiter::BlockDollar ? SyntaxMarker::DoubleDollar
+                            : opening ? SyntaxMarker::MathBracketOpen : SyntaxMarker::MathBracketClose;
+                    }
+                    special.source_markers.push_back({range, icon});
+                }
                 if (!special.content_to_source.empty()) {
                     rb.content_span = {b.id, {special.content_to_source.front(), special.content_to_source.back()}};
                 }

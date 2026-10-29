@@ -5,16 +5,16 @@
 #include <vector>
 
 #include "support/folia_test.hpp"
-import folia.core.parser;
-import folia.core.ast;
-import folia.core.block_source;
-import folia.core.block_tree;
-import folia.core.document_text;
-import folia.core.image_dimension;
-import folia.core.inline_cst;
-import folia.core.inline_document;
-import folia.core.serializer;
-import folia.core.utf;
+import folia.markdown.parser;
+import folia.markdown.ast;
+import folia.markdown.block_source;
+import folia.markdown.block_tree;
+import folia.markdown.document_text;
+import folia.markdown.image_dimension;
+import folia.markdown.inline_cst;
+import folia.markdown.inline_document;
+import folia.markdown.serializer;
+import folia.markdown.utf;
 
 using namespace folia;
 using namespace boost::ut;
@@ -22,6 +22,17 @@ using namespace boost::ut;
 #include "support/parser_test_support.hpp"
 
 suite parser_format_tests = [] {
+
+"frontmatter_roundtrip_keeps_physical_markers_and_endings"_test=[] {
+    for (const auto& source:std::vector<std::string>{"---\ntitle: One\n---", "---\r\ntitle: One\r\n---\r\n\r\nbody",
+        "---\rtitle: One\r---\r", "---\n---", "---toml\ntitle = 'One'\n---\n",
+        "--- json\n{\"title\":\"One\"}\n---\n", "  ---  \ntitle: One\n ---  \n\nbody"}) {
+        const auto parsed=parse_text(1,source);
+        expect(serialize_markdown(parsed.document)==source)<<source;
+        const auto reloaded=parse_text(2,serialize_markdown(parsed.document));
+        expect(serialize_markdown(reloaded.document)==source)<<source;
+    }
+};
 
 "tables_give_every_cell_its_own_inline_document"_test = [] {
     const auto parsed = parse_text(1,
@@ -234,16 +245,20 @@ suite parser_format_tests = [] {
         "<p style='text-align: justify !important'>justify</p>\n"
         "<p align='sideways'>default</p>";
     const auto parsed = parse_text(1, source);
-    expect(fatal(parsed.document.root.children.size() == 4u));
-    if (parsed.document.root.children.size() != 4u) return;
+    expect(fatal(parsed.document.root.children.size() == 1u));
+    const auto& container = parsed.document.root.children.front();
+    expect(container.kind == BlockKind::HtmlContainer);
+    const auto& paragraphs = container.children;
+    expect(fatal(paragraphs.size() == 4u));
+    if (paragraphs.size() != 4u) return;
 
-    expect(fatal(parsed.document.root.children[0].html_special().text_alignment
+    expect(fatal(paragraphs[0].html_special().text_alignment
         == std::optional<TextAlignment>{TextAlignment::Center}));
-    expect(fatal(parsed.document.root.children[1].html_special().text_alignment
+    expect(fatal(paragraphs[1].html_special().text_alignment
         == std::optional<TextAlignment>{TextAlignment::End}));
-    expect(fatal(parsed.document.root.children[2].html_special().text_alignment
+    expect(fatal(paragraphs[2].html_special().text_alignment
         == std::optional<TextAlignment>{TextAlignment::Justify}));
-    expect(fatal(!parsed.document.root.children[3].html_special().text_alignment));
+    expect(fatal(!paragraphs[3].html_special().text_alignment));
     expect(fatal(serialize_markdown(parsed.document) == source));
 };
 

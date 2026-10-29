@@ -2,7 +2,7 @@
 #include "editor/rendering/EditorDocumentBlockPreparer.h"
 #include "editor/rendering/EditorContentGeometry.h"
 
-import folia.core.utf;
+import folia.markdown.utf;
 
 namespace winrt::Folia
 {
@@ -142,7 +142,7 @@ namespace winrt::Folia
             shiftOverlay(display.footnoteOverlays);
 
             auto style = folia::InlineStyle::plain();
-            style.code = true;
+            style.code = folia::CodeStyle::Block;
             display.ranges.push_back({
                 start,
                 1,
@@ -299,7 +299,7 @@ namespace winrt::Folia
             auto height = requestedHeight.value_or(0.0f);
             if ((width <= 0.0f || height <= 0.0f) && !special.src.empty())
             {
-                if (auto dimensions = renderCache.ProbeImageDimensions(
+                if (auto dimensions = renderCache.images.ProbeImageDimensions(
                         resources, frame.baseDirectory, special.src))
                 {
                     width = requestedWidth.value_or(dimensions->width);
@@ -326,7 +326,7 @@ namespace winrt::Folia
             : level == 2 ? styleSheet.heading2
             : styleSheet.heading3;
         for (auto const& source : special.inline_image_sources)
-            renderCache.ProbeImageDimensions(resources, frame.baseDirectory, source);
+            renderCache.images.ProbeImageDimensions(resources, frame.baseDirectory, source);
         auto averageAdvance = (std::max)(1.0f, font.size * 0.72f);
         auto charactersPerLine = (std::max)(
             std::size_t{1},
@@ -551,7 +551,8 @@ namespace winrt::Folia
                 textLayoutEngine,
                 inlineImages,
                 mathJax,
-                svgNormalizer);
+                svgNormalizer,
+                treeSitter);
             if (prepared.table)
             {
                 for (auto const& span : block.special().table_cell_spans)
@@ -575,6 +576,7 @@ namespace winrt::Folia
             contentWidth,
             requestEmbedded,
             highPriority);
+        HighlightMathSources(prepared.display, caret, treeSitter);
         ApplyMermaidPresentation(
             prepared.display,
             block,
@@ -713,20 +715,9 @@ namespace winrt::Folia
         prepared.mathPreviews.reserve(prepared.display.mathPreviews.size());
         for (auto const& preview : prepared.display.mathPreviews)
         {
-            auto previewDisplay = BuildMathPreviewText(preview);
-            auto previewLayout = textLayoutEngine.CreateFlow(
-                previewDisplay,
-                resources.textFormat.Get(),
-                (std::max)(1.0f, contentWidth - 16.0f),
-                {});
-            auto previewHeight = textLayoutEngine.MeasureHeight(
-                previewLayout.Get(),
-                styleSheet.body.lineHeight);
-            prepared.mathPreviews.push_back({
-                std::move(previewDisplay),
-                std::move(previewLayout),
-                previewHeight,
-            });
+            prepared.mathPreviews.push_back(PrepareMathPreview(preview, textLayoutEngine,
+                resources.textFormat.Get(), (std::max)(1.0f, contentWidth - 16.0f),
+                resources.surfaceWidthDip, styleSheet.mathPreview));
         }
         prepared.mermaidPreviews.reserve(
             prepared.display.mermaidPreviews.size());
@@ -749,7 +740,7 @@ namespace winrt::Folia
                 prepared.display.ranges));
         auto previewHeight = 0.0f;
         for (auto const& preview : prepared.mathPreviews)
-            previewHeight += preview.height + 24.0f;
+            if (!preview.floating) previewHeight += preview.Height() + 24.0f;
         for (auto const& preview : prepared.mermaidPreviews)
             previewHeight += preview.height + 24.0f;
         prepared.height = prepared.textHeight + previewHeight + paddingTop + paddingBottom;

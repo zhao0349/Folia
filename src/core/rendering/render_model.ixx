@@ -3,17 +3,18 @@
 export module folia.core.render_model;
 import std;
 import folia.core.types;
-import folia.core.ids;
-import folia.core.dialect;
-import folia.core.image_dimension;
+import folia.markdown.ids;
+import folia.markdown.dialect;
+import folia.markdown.image_dimension;
 import folia.core.theme;
-import folia.core.outline;
-import folia.core.diagnostics;
-import folia.core.ast; // for AST contents reused during build (children)
-import folia.core.selection;
-import folia.core.text_edit;
+import folia.markdown.outline;
+import folia.markdown.diagnostics;
+import folia.markdown.ast; // for AST contents reused during build (children)
+import folia.markdown.selection;
+import folia.markdown.text_edit;
 import folia.core.source_style;
-import folia.core.block_source;
+import folia.markdown.block_source;
+export import folia.core.syntax_marker;
 
 export namespace folia {
 
@@ -120,9 +121,16 @@ struct InlinePresentationStyle {
     bool highlight = false;
 };
 
+// Monospace text has different presentation in a code span and a code block.
+// Keep that distinction in the semantic render projection, not in each painter.
+enum class CodeStyle : std::uint8_t { None, Inline, Block };
+
 struct InlineStyle {
     bool bold = false, italic = false, underline = false, strikethrough = false;
-    bool code = false, link = false;
+    CodeStyle code = CodeStyle::None;
+    // Decoration ownership from the CST, never a selection coordinate.
+    NodeId code_span_id{};
+    bool link = false;
     std::optional<std::uint8_t> heading_level;
     std::shared_ptr<const InlinePresentationStyle> presentation;
     static InlineStyle plain() { return {}; }
@@ -231,6 +239,9 @@ struct InlineRenderItem;
 
 struct InlineRenderSemanticPayload {
     std::u32string source_text;          // exact source spelling for this span
+    std::optional<SourceRange> content_range; // CST content excluding source delimiters
+    SyntaxMarker opening_marker = SyntaxMarker::None;
+    SyntaxMarker closing_marker = SyntaxMarker::None;
     std::string href, src, alt;          // Image/Link
     std::string footnote_label;          // FootnoteReference / generated footnote controls
     std::optional<std::string> title;
@@ -241,9 +252,12 @@ struct InlineRenderSemanticPayload {
 };
 
 struct InlineRenderPayload {
+    SyntaxMarker syntax_marker = SyntaxMarker::None;
     float block_spacing_height = 0.0f;
     std::u32string display_text;         // generated/normalized visual spelling
     std::optional<NodeId> marker_owner;
+    // The owning CST construct, not a second editing coordinate.
+    std::optional<SourceRange> marker_construct;
     MathDisplayMode display = MathDisplayMode::Inline;
     MathDelimiter math_delim = MathDelimiter::InlineDollar;
     MarkerStyle marker_style;
@@ -299,6 +313,11 @@ enum class RenderBlockKind {
 };
 
 struct RenderBlockSpecial {
+    struct SourceMarker {
+        SourceRange range;
+        SyntaxMarker icon = SyntaxMarker::None;
+    };
+    std::vector<SourceMarker> source_markers;
     // CodeBlock
     std::u32string raw_source;
     std::vector<std::size_t> content_to_source;

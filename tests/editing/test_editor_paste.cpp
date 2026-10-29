@@ -5,26 +5,26 @@
 #include <vector>
 
 #include "support/folia_test.hpp"
-import folia.core.ast;
-import folia.core.block_source;
-import folia.core.block_tree;
+import folia.markdown.ast;
+import folia.markdown.block_source;
+import folia.markdown.block_tree;
 import folia.core.command;
-import folia.core.dialect;
-import folia.core.document;
+import folia.markdown.dialect;
+import folia.markdown.document;
 import folia.core.document_edit;
 import folia.core.document_ids;
-import folia.core.document_text;
+import folia.markdown.document_text;
 import folia.core.editor;
-import folia.core.inline_cst;
-import folia.core.inline_document;
-import folia.core.instrumentation;
+import folia.markdown.inline_cst;
+import folia.markdown.inline_document;
+import folia.markdown.instrumentation;
 import folia.core.input;
 import folia.core.render_builder;
 import folia.core.render_model;
-import folia.core.serializer;
-import folia.core.text_edit;
+import folia.markdown.serializer;
+import folia.markdown.text_edit;
 import folia.core.theme;
-import folia.core.utf;
+import folia.markdown.utf;
 
 using namespace folia;
 using namespace boost::ut;
@@ -45,7 +45,8 @@ suite editor_paste_tests = [] {
     expect(fatal(bool(counters.full_document_parses == 0u)));
     expect(fatal(bool(counters.full_document_serializations == 0u)));
     expect(fatal(bool(counters.full_tree_transaction_diffs == 0u)));
-    expect(fatal(bool(counters.inline_reparses == 3u)));
+    // One parse for the clipboard fragment and one for the edited owner.
+    expect(counters.inline_reparses == 2u) << counters.inline_reparses;
     expect(fatal(bool(transaction->operations.size() == 1u)));
     expect(fatal(bool(std::holds_alternative<DocumentTextOperation>(transaction->operations.front()))));
     expect(fatal(bool(editor.markdown_utf8() == "aXb")));

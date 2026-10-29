@@ -1,7 +1,7 @@
 #pragma once
 
 import folia.core.render_model;
-import folia.core.text_edit;
+import folia.markdown.text_edit;
 import folia.platform.editor_interaction;
 
 #include "editor/rendering/EditorDocumentPainter.h"
@@ -10,6 +10,7 @@ import folia.platform.editor_interaction;
 #include "editor/rendering/EditorPreparedDocument.h"
 #include "editor/rendering/EditorRenderResources.h"
 #include "editor/rendering/EditorStyleSheet.h"
+#include "editor/rendering/EditorCaretAnimation.h"
 #include "editor/session/EditorRenderFrame.h"
 
 namespace winrt::Folia
@@ -25,6 +26,7 @@ namespace winrt::Folia
             EditorRenderResources& resources,
             EditorStyleSheet const& styleSheet,
             EditorInteractionMap& interactionMap,
+            EditorCaretAnimation& caretAnimation,
             std::vector<D2D1_RECT_F>& nonInteractiveRegions,
             EditorInlineImageRenderer& inlineImages,
             EditorDocumentPainter& documentPainter,
@@ -32,7 +34,7 @@ namespace winrt::Folia
             EditorDrawMathFallback drawMathFallback,
             EditorDrawMermaid drawMermaid);
 
-        void Paint(
+        std::optional<D2D1_RECT_F> Paint(
             detail::EditorRenderFrame const& frame,
             EditorPreparedDocument& preparedDocument,
             folia::TextSelection selection,
@@ -57,6 +59,7 @@ namespace winrt::Folia
         EditorRenderResources& resources;
         EditorStyleSheet const& styleSheet;
         EditorInteractionMap& interactionMap;
+        EditorCaretAnimation& caretAnimation;
         std::vector<D2D1_RECT_F>& nonInteractiveRegions;
         EditorInlineImageRenderer& inlineImages;
         EditorDocumentPainter& documentPainter;

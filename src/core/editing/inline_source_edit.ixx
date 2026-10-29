@@ -1,15 +1,41 @@
 // folia.core.inline_source_edit — the sole mutation path for inline content.
 export module folia.core.inline_source_edit;
 import std;
-import folia.core.ids;
-import folia.core.inline_cst;
-import folia.core.inline_document;
-import folia.core.inline_parser;
-import folia.core.text_edit;
+import folia.markdown.ids;
+import folia.markdown.inline_cst;
+import folia.markdown.inline_document;
+import folia.markdown.inline_parser;
+import folia.markdown.text_edit;
 
 export namespace folia {
 
 namespace inline_source_edit_detail {
+
+inline std::vector<NodeId> node_identities(const InlineCstNodes& roots) {
+    std::vector<NodeId> result;
+    std::vector<const InlineCstNode*> pending;
+    for (auto i=roots.size(); i>0; --i) pending.push_back(&roots[i-1]);
+    while (!pending.empty()) {
+        const auto* node=pending.back(); pending.pop_back();
+        result.push_back(node->id);
+        for (auto i=node->children.size(); i>0; --i) pending.push_back(&node->children[i-1]);
+    }
+    return result;
+}
+
+inline bool restore_identities(InlineCstNodes& roots, std::span<const NodeId> identities) {
+    std::vector<InlineCstNode*> nodes;
+    std::vector<InlineCstNode*> pending;
+    for (auto i=roots.size(); i>0; --i) pending.push_back(&roots[i-1]);
+    while (!pending.empty()) {
+        auto* node=pending.back(); pending.pop_back();
+        nodes.push_back(node);
+        for (auto i=node->children.size(); i>0; --i) pending.push_back(&node->children[i-1]);
+    }
+    if (nodes.size()!=identities.size()) return false;
+    for (std::size_t i=0; i<nodes.size(); ++i) nodes[i]->id=identities[i];
+    return true;
+}
 
 inline std::optional<SourceRange> adjacent_hard_break(
     const InlineCstNodes& nodes,
@@ -101,6 +127,38 @@ inline void reconcile_nodes(
 
 } // namespace inline_source_edit_detail
 
+// Complete paired formatting markers are semantic editing units. Incomplete
+// input remains ordinary source; recognition always comes from the CST.
+inline const InlineCstNode* inline_format_marker_at(
+    const InlineCstNodes& nodes, std::size_t character) {
+    for (const auto& node : nodes) {
+        if (character < node.range.start || character >= node.range.end) continue;
+        if (auto child = inline_format_marker_at(node.children, character)) return child;
+        switch (node.kind) {
+            case InlineCstKind::Emphasis: case InlineCstKind::Strong:
+            case InlineCstKind::Strikethrough: case InlineCstKind::CodeSpan:
+            case InlineCstKind::InlineMath: break;
+            default: continue;
+        }
+        const auto& delimiters = node.delimiter_ranges();
+        if (node.status != ParseStatus::Complete || !delimiters.closing) continue;
+        for (auto range : {delimiters.opening, *delimiters.closing})
+            if (character >= range.start && character < range.end) return &node;
+    }
+    return nullptr;
+}
+
+inline std::size_t inline_format_marker_boundary(
+    const InlineDocument& document, std::size_t offset, bool forward) {
+    if (auto node = inline_format_marker_at(document.tree.nodes, offset)) {
+        const auto& delimiters = node->delimiter_ranges();
+        for (auto range : {delimiters.opening, *delimiters.closing})
+            if (offset > range.start && offset < range.end)
+                return forward ? range.end : range.start;
+    }
+    return offset;
+}
+
 inline std::optional<SourceRange> inline_backward_delete_range(
     const InlineDocument& document,
     std::size_t offset,
@@ -163,7 +221,9 @@ inline AppliedSourceEdit apply_inline_source_edit(
     inverse.container_id = owner_id;
     inverse.range = {edit.range.start, edit.range.start + edit.replacement.size()};
     inverse.replacement = removed;
-    return AppliedSourceEdit{edit, std::move(inverse)};
+    return AppliedSourceEdit{edit, std::move(inverse), InlineIdentityPatch{
+        inline_source_edit_detail::node_identities(before_tree.nodes),
+        inline_source_edit_detail::node_identities(document.tree.nodes)}};
 }
 
 } // namespace folia

@@ -48,7 +48,15 @@ namespace winrt::Folia
         lineNumberBrush = nullptr;
         lineNumberBackgroundBrush = nullptr;
         accentBrush = nullptr;
+        previewBackgroundBrush = nullptr;
+        previewBorderBrush = nullptr;
+        popupShadow.Reset();
+        mathBracketBrush.Reset();
+        syntaxIcons.Reset();
         codeBrush = nullptr;
+        mathDecorationBrush = nullptr;
+        inlineCodeBrush = nullptr;
+        inlineCodeBackgroundBrush = nullptr;
         panelBrush = nullptr;
         canvasBrush = nullptr;
         nestedQuoteBrush = nullptr;
@@ -242,11 +250,19 @@ namespace winrt::Folia
         if (!textBrush)
         {
             winrt::check_hresult(d2dContext->CreateSolidColorBrush(styleSheet.textColor, textBrush.GetAddressOf()));
+            auto background = styleSheet.previewBackgroundColor; background.a = 1;
+            auto border = styleSheet.previewBorderColor;
+            winrt::check_hresult(d2dContext->CreateSolidColorBrush(background, previewBackgroundBrush.GetAddressOf()));
+            winrt::check_hresult(d2dContext->CreateSolidColorBrush(border, previewBorderBrush.GetAddressOf()));
+            winrt::check_hresult(d2dContext->CreateSolidColorBrush(styleSheet.accentColor, mathBracketBrush.GetAddressOf()));
             winrt::check_hresult(d2dContext->CreateSolidColorBrush(styleSheet.mutedColor, mutedBrush.GetAddressOf()));
             winrt::check_hresult(d2dContext->CreateSolidColorBrush(styleSheet.lineNumberColor, lineNumberBrush.GetAddressOf()));
             winrt::check_hresult(d2dContext->CreateSolidColorBrush(styleSheet.lineNumberBackgroundColor, lineNumberBackgroundBrush.GetAddressOf()));
             winrt::check_hresult(d2dContext->CreateSolidColorBrush(styleSheet.accentColor, accentBrush.GetAddressOf()));
             winrt::check_hresult(d2dContext->CreateSolidColorBrush(styleSheet.codeTextColor, codeBrush.GetAddressOf()));
+            winrt::check_hresult(d2dContext->CreateSolidColorBrush(styleSheet.textColor, mathDecorationBrush.GetAddressOf()));
+            winrt::check_hresult(d2dContext->CreateSolidColorBrush(styleSheet.inlineCodeTextColor, inlineCodeBrush.GetAddressOf()));
+            winrt::check_hresult(d2dContext->CreateSolidColorBrush(styleSheet.inlineCodeBackgroundColor, inlineCodeBackgroundBrush.GetAddressOf()));
             winrt::check_hresult(d2dContext->CreateSolidColorBrush(styleSheet.panelColor, panelBrush.GetAddressOf()));
             winrt::check_hresult(d2dContext->CreateSolidColorBrush(styleSheet.canvasColor, canvasBrush.GetAddressOf()));
             winrt::check_hresult(d2dContext->CreateSolidColorBrush(styleSheet.nestedQuoteColor, nestedQuoteBrush.GetAddressOf()));

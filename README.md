@@ -49,6 +49,13 @@ the user did not change.
 - **Focused reading** — configurable themes, English and Chinese interfaces,
   a borderless WinUI shell, file-association support, and cancellable native
   Windows PDF export with page progress.
+- **Folder workspace** — lazy file browsing, preview tabs that become permanent
+  on double-click or editing, and independent history and reading positions per
+  document. Create files and folders or rename with F2 directly in the tree;
+  drag onto a folder to move, or hold Ctrl to copy. Long operations show progress,
+  and moving an open document preserves its unsaved edits and undo history.
+  The title bar holds the tabs and main menu; file browsing and the
+  document outline have separate animated sidebars.
 - **Encoding aware** — ICU-based charset detection ranks likely encodings when
   reopening a file, while explicit conversion saves in any installed ICU
   encoding and preserves the selected encoding on subsequent saves.
@@ -99,7 +106,7 @@ powershell -ExecutionPolicy Bypass -File .\build_app.ps1 -Configuration Release 
 Build the per-user x64 MSI with:
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File .\build_msi.ps1 -Version 0.2.1
+powershell -ExecutionPolicy Bypass -File .\build_msi.ps1 -Version 0.5.4
 ```
 
 The installer creates a self-contained Windows App SDK build, so the target
@@ -133,13 +140,13 @@ Run the platform-independent core test suite and deterministic Windows editor
 tests with:
 
 ```powershell
-cmd /c build_test.bat
-cmd /c build_platform_test.bat
-cmd /c build_encoding_test.bat
+cmd /c tests\run_core.bat
+cmd /c tests\platform\run.bat
+cmd /c tests\encoding\run.bat
 ```
 
 Both runners forward positional Boost.UT name filters, for example
-`cmd /c build_test.bat "*inline*"`. See the [test layout](tests/README.md) for
+`cmd /c tests\run_core.bat "*inline*"`. See the [test layout](tests/README.md) for
 suite ownership and conventions.
 
 The WinUI project entry point is [Folia.vcxproj](src/app-winui/Folia.vcxproj).

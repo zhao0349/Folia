@@ -20,24 +20,43 @@ namespace winrt::Folia
         using Render = std::function<void()>;
         using WindowHandle = std::function<HWND()>;
         using SetExternalChange = std::function<void(bool visible, bool fileDeleted)>;
+        using ConfirmUnsaved = std::function<winrt::Windows::Foundation::IAsyncOperation<
+            winrt::Microsoft::UI::Xaml::Controls::ContentDialogResult>()>;
+        using PickSaveFile = std::function<winrt::Windows::Foundation::IAsyncOperation<winrt::Windows::Storage::StorageFile>()>;
 
         EditorDocumentController();
         ~EditorDocumentController();
         EditorDocumentController(EditorDocumentController const&) = delete;
         EditorDocumentController& operator=(EditorDocumentController const&) = delete;
 
-        void Attach(
-            EditorSession& session,
-            EditorSurfaceRenderer& renderer,
-            EditorTextInputController& textInput,
-            ExecuteCommand executeCommand,
-            SetStatus setStatus,
-            SetProgress setProgress,
-            DocumentChanged documentChanged,
-            Render render,
-            WindowHandle windowHandle,
-            SetExternalChange setExternalChange);
+        struct Presentation {
+            EditorSurfaceRenderer& renderer;
+            EditorTextInputController& textInput;
+            ExecuteCommand executeCommand;
+            SetStatus setStatus;
+            SetProgress setProgress;
+            DocumentChanged documentChanged;
+            Render render;
+            WindowHandle windowHandle;
+            SetExternalChange setExternalChange;
+        };
+        void Attach(EditorSession& session, Presentation presentation);
+        void RebindPresentation(Presentation presentation);
         void Detach();
+        void SuspendPresentation();
+        void ResumePresentation(EditorSurfaceRenderer& renderer, EditorTextInputController& textInput);
+        bool IsModified() const noexcept;
+        bool IsLoading() const noexcept;
+        std::optional<std::uint64_t> BeginFileRelocation();
+        void FinishFileRelocation(std::uint64_t token, winrt::Windows::Storage::StorageFile const& file = nullptr);
+        winrt::Windows::Foundation::IAsyncOperation<bool> OpenFileAsync(
+            winrt::Windows::Storage::StorageFile file);
+        void SetSaveDialogs(ConfirmUnsaved confirm, PickSaveFile picker = {});
+        bool HasUnsavedChanges() const;
+        winrt::Windows::Foundation::IAsyncOperation<bool> ConfirmCloseAsync();
+        winrt::Windows::Foundation::IAsyncOperation<bool> SaveAsync(bool saveAs = false);
+        winrt::Windows::Foundation::IAsyncOperation<bool> PasteAsync(
+            winrt::Windows::ApplicationModel::DataTransfer::DataPackageView content);
         void OpenDocument();
         void OpenDocumentPath(winrt::hstring const& path);
         void ReopenDocumentWithEncoding(std::string encoding);
@@ -57,8 +76,13 @@ namespace winrt::Folia
 
     private:
         struct State;
+        void BindPresentation(Presentation presentation);
         enum class LoadReason { Open, EncodingReopen, ExternalReload };
         static bool Active(std::shared_ptr<State> const& state, std::uint64_t generation);
+        static bool OwnsDocument(std::shared_ptr<State> const& state, std::uint64_t generation);
+        static winrt::Windows::Foundation::IAsyncOperation<bool> OpenFileAsync(
+            std::shared_ptr<State> state, std::uint64_t generation,
+            winrt::Windows::Storage::StorageFile file);
         static winrt::fire_and_forget OpenDocumentAsync(std::shared_ptr<State> state, std::uint64_t generation);
         static winrt::fire_and_forget OpenDocumentPathAsync(
             std::shared_ptr<State> state,
@@ -68,10 +92,6 @@ namespace winrt::Folia
             std::shared_ptr<State> state,
             std::uint64_t generation,
             std::string encoding);
-        static winrt::fire_and_forget SaveDocumentWithEncodingAsync(
-            std::shared_ptr<State> state,
-            std::uint64_t generation,
-            DocumentEncoding encoding);
         static winrt::Windows::Foundation::IAsyncAction LoadDocumentAsync(
             std::shared_ptr<State> state,
             std::uint64_t generation,
@@ -87,6 +107,7 @@ namespace winrt::Folia
             std::uint64_t generation,
             std::uint64_t debounceTicket);
         static void EvaluateReload(std::shared_ptr<State> const& state, std::uint64_t generation, bool manual);
+        static winrt::fire_and_forget EvaluateReloadAsync(std::shared_ptr<State> state, std::uint64_t generation, bool manual);
         static void BeginPendingReload(std::shared_ptr<State> const& state, std::uint64_t generation);
         static winrt::fire_and_forget ReloadPendingAsync(
             std::shared_ptr<State> state,
@@ -95,13 +116,18 @@ namespace winrt::Folia
         static void MarkCurrentDocumentSaved(
             std::shared_ptr<State> const& state,
             folia::platform::reload::WatchedFileVersion version,
-            std::string_view source);
-        static winrt::fire_and_forget SaveDocumentAsync(std::shared_ptr<State> state, std::uint64_t generation);
-        static winrt::fire_and_forget SaveDocumentAsAsync(std::shared_ptr<State> state, std::uint64_t generation);
+            std::string_view source, std::uint64_t contentState);
+        static winrt::Windows::Foundation::IAsyncOperation<bool> SaveDocumentAsync(
+            std::shared_ptr<State> state, std::uint64_t generation, bool saveAs = false,
+            std::optional<DocumentEncoding> encoding = std::nullopt);
+        static winrt::Windows::Foundation::IAsyncOperation<bool> ConfirmCloseAsync(
+            std::shared_ptr<State> state, std::uint64_t generation);
         static winrt::fire_and_forget ExportPdfAsync(std::shared_ptr<State> state, std::uint64_t generation);
         static winrt::fire_and_forget InsertImageAsync(std::shared_ptr<State> state, std::uint64_t generation);
         static winrt::fire_and_forget OpenLinkAsync(std::shared_ptr<State> state, std::uint64_t generation, std::string href);
-        static winrt::fire_and_forget PasteClipboardAsync(std::shared_ptr<State> state, std::uint64_t generation);
+        static winrt::Windows::Foundation::IAsyncOperation<bool> PasteClipboardAsync(
+            std::shared_ptr<State> state, std::uint64_t generation,
+            winrt::Windows::ApplicationModel::DataTransfer::DataPackageView content = nullptr);
 
         std::shared_ptr<State> state_;
     };

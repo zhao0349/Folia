@@ -1,7 +1,7 @@
 [CmdletBinding()]
 param(
     [ValidatePattern('^\d+\.\d+\.\d+$')]
-    [string]$Version = '0.2.3',
+    [string]$Version = '0.5.4',
 
     [ValidateSet('x64')]
     [string]$Platform = 'x64',
@@ -55,6 +55,10 @@ if ($LASTEXITCODE -ne 0) { throw "Folia application build failed with exit code 
 if (-not (Test-Path -LiteralPath (Join-Path $ProgramRoot 'Folia.exe') -PathType Leaf)) {
     throw "Folia executable was not produced under $ProgramRoot"
 }
+
+& (Join-Path $Root 'tests\app\test_startup.ps1') -Executable (Join-Path $ProgramRoot 'Folia.exe') `
+    -ReportDirectory (Join-Path $BuildRoot 'tests\startup-msi')
+if ($LASTEXITCODE -ne 0) { throw 'Folia startup and normal-close test failed.' }
 
 & $PayloadGenerator -ProgramRoot $ProgramRoot -AssetsRoot $AssetsRoot -OutputPath $GeneratedPayload
 if ($LASTEXITCODE -ne 0) { throw "WiX payload generation failed with exit code $LASTEXITCODE" }

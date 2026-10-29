@@ -4,22 +4,22 @@
 #include <vector>
 
 #include "support/folia_test.hpp"
-import folia.core.parser;
+import folia.markdown.parser;
 import folia.core.document_edit;
-import folia.core.document;
-import folia.core.document_symbols;
-import folia.core.inline_parser;
+import folia.markdown.document;
+import folia.markdown.document_symbols;
+import folia.markdown.inline_parser;
 import folia.core.render_builder;
 import folia.core.render_model;
-import folia.core.ast;
-import folia.core.block_source;
-import folia.core.block_tree;
-import folia.core.callout;
+import folia.markdown.ast;
+import folia.markdown.block_source;
+import folia.markdown.block_tree;
+import folia.markdown.callout;
 import folia.core.text_measurer;
 import folia.core.block_layout;
 import folia.core.hit_test;
 import folia.core.selection_geometry;
-import folia.core.selection;
+import folia.markdown.selection;
 
 using namespace folia;
 using namespace boost::ut;
@@ -66,7 +66,7 @@ suite render_scalar_projection_tests = [] {
         for (auto const& item : items) {
             if (item.id != code_id) continue;
             code_items.push_back(&item);
-            if (item.kind == InlineRenderItem::Kind::Text && item.style.code) {
+            if (item.kind == InlineRenderItem::Kind::Text && item.style.code == CodeStyle::Inline) {
                 displayed += item.text;
                 if (item.text == U" " && item.source_span.source_range.length() == 2) {
                     has_crlf_segment = true;

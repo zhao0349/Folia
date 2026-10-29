@@ -78,6 +78,7 @@ namespace winrt::Folia
             void Render(std::string_view tex, bool display, float em, float containerWidth,
                 std::string_view color, std::stop_token stop = {});
             void Submit();
+            std::size_t Size() const noexcept;
         };
         MathJaxRenderer();
         ~MathJaxRenderer();
@@ -96,6 +97,11 @@ namespace winrt::Folia
             std::string_view color,
             std::stop_token stop = {},
             MathRenderPurpose purpose = MathRenderPurpose::Document);
+        // Reuse geometry while laying out offscreen blocks, without starting
+        // rendering or disk reads. Participates in BeginBlock/EndBlock ownership.
+        std::shared_ptr<MathJaxSvg const> Lookup(
+            std::string_view tex, bool display, float em, float containerWidth,
+            std::string_view color, MathRenderPurpose purpose = MathRenderPurpose::Document);
         std::shared_ptr<MathJaxSvg const> Prepare(
             std::string_view tex,
             bool display,

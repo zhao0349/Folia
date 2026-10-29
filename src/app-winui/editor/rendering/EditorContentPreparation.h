@@ -1,9 +1,9 @@
 #pragma once
 
-import folia.core.ids;
-import folia.core.image_dimension;
+import folia.markdown.ids;
+import folia.markdown.image_dimension;
 import folia.core.render_model;
-import folia.core.text_edit;
+import folia.markdown.text_edit;
 import folia.platform.editor_display_mapping;
 import folia.platform.editor_block_spacing;
 
@@ -11,6 +11,7 @@ import folia.platform.editor_block_spacing;
 #include "media/MermaidRenderer.h"
 #include "media/SvgNormalizer.h"
 #include "media/TreeSitterHighlighter.h"
+#include "editor/rendering/EditorSyntaxIcons.h"
 
 namespace winrt::Folia
 {
@@ -37,6 +38,8 @@ namespace winrt::Folia
         bool marker = false;
         SyntaxHighlightKind syntax = SyntaxHighlightKind::None;
         std::optional<EditorFootnoteControlKind> footnoteControl;
+        SyntaxIcon icon = SyntaxIcon::None;
+        SyntaxIconPlacement iconPlacement = SyntaxIconPlacement::Inline;
     };
 
     struct DisplayInlineText
@@ -52,6 +55,7 @@ namespace winrt::Folia
             float progressEnd = 1.0f;
             bool strikethrough = false;
             bool displayMath = false;
+            D2D1_COLOR_F foreground{0, 0, 0, 1};
         };
 
         struct MathPreview
@@ -59,6 +63,20 @@ namespace winrt::Folia
             MathJaxSvg svg;
             folia::TextSpan contentSpan;
             bool strikethrough = false;
+            D2D1_COLOR_F foreground{0, 0, 0, 1};
+        };
+        struct MathSource
+        {
+            std::u32string tex;
+            folia::TextSpan span;
+            // Block projections can include indentation/fences in source.
+            // Inline math is linear and leaves this projection empty.
+            std::vector<std::size_t> toSource;
+        };
+        struct MathBracket
+        {
+            folia::TextSpan span;
+            bool matched = false;
         };
 
         struct ImageOverlay
@@ -115,6 +133,8 @@ namespace winrt::Folia
         std::vector<InlineStyleRange> ranges;
         std::vector<MathOverlay> mathOverlays;
         std::vector<MathPreview> mathPreviews;
+        std::vector<MathSource> mathSources;
+        std::vector<MathBracket> mathBrackets;
         std::vector<ImageOverlay> imageOverlays;
         std::vector<MermaidOverlay> mermaidOverlays;
         std::vector<MermaidPreview> mermaidPreviews;
@@ -128,7 +148,7 @@ namespace winrt::Folia
 
     std::wstring ToWide(std::u32string_view text);
     std::string SvgColor(D2D1_COLOR_F color);
-    std::optional<std::vector<std::uint8_t>> DecodeBase64(std::string_view source);
+    D2D1_COLOR_F InlineForeground(folia::InlineStyle const& style, D2D1_COLOR_F fallback);
     std::optional<MermaidSvg> NormalizeMermaidSvg(MermaidSvg const& source, SvgNormalizer& normalizer, bool allowQueue);
     std::u32string InlineText(std::vector<folia::InlineRenderItem> const& items);
     folia::TextPosition InlineItemsEndPosition(std::vector<folia::InlineRenderItem> const& items, folia::TextPosition fallback);
@@ -153,13 +173,14 @@ namespace winrt::Folia
         MathJaxSvg const& math,
         folia::TextSpan sourceSpan,
         bool editing,
-        folia::InlineStyle style);
+        folia::InlineStyle style, D2D1_COLOR_F foreground);
     void ApplyInlinePlaceholder(IDWriteTextLayout* layout, UINT32 displayStart, float width, float height, float baseline);
     void ApplyMathInlineObjects(IDWriteTextLayout* layout, std::vector<DisplayInlineText::MathOverlay> const& overlays);
     void ApplyBlockSpacingInlineObjects(IDWriteTextLayout* layout, DisplayInlineText const& display);
     void ApplyIndentInlineObjects(IDWriteTextLayout* layout, std::vector<DisplayInlineText::IndentOverlay> const& overlays);
     void ApplyTaskCheckboxInlineObjects(IDWriteTextLayout* layout, std::vector<DisplayInlineText::TaskCheckboxOverlay> const& overlays);
     DisplayInlineText BuildMathPreviewText(DisplayInlineText::MathPreview const& preview);
+    void HighlightMathSources(DisplayInlineText& display, folia::TextPosition caret, TreeSitterHighlighter& highlighter);
     DisplayInlineText BuildDisplayInlineText(
         std::vector<folia::InlineRenderItem> const& items,
         folia::TextPosition caret,

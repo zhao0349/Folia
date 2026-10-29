@@ -8,6 +8,7 @@ namespace winrt::Folia
         EditorRenderResources& valueResources,
         EditorStyleSheet const& valueStyleSheet,
         EditorInteractionMap& valueInteractionMap,
+        EditorCaretAnimation& valueCaretAnimation,
         std::vector<D2D1_RECT_F>& valueNonInteractiveRegions,
         EditorInlineImageRenderer& valueInlineImages,
         EditorDocumentPainter& valueDocumentPainter,
@@ -17,6 +18,7 @@ namespace winrt::Folia
         : resources(valueResources),
           styleSheet(valueStyleSheet),
           interactionMap(valueInteractionMap),
+          caretAnimation(valueCaretAnimation),
           nonInteractiveRegions(valueNonInteractiveRegions),
           inlineImages(valueInlineImages),
           documentPainter(valueDocumentPainter),
@@ -26,7 +28,7 @@ namespace winrt::Folia
     {
     }
 
-    void EditorDocumentRenderPass::Paint(
+    std::optional<D2D1_RECT_F> EditorDocumentRenderPass::Paint(
         detail::EditorRenderFrame const& frame,
         EditorPreparedDocument& preparedDocument,
         folia::TextSelection selection,
@@ -51,6 +53,7 @@ namespace winrt::Folia
                 resources.lineNumberBackgroundBrush.Get());
         }
 
+        EditorPreparedMathPreview const* floatingPreview = nullptr;
         for (auto blockIndex = viewportBegin; blockIndex < viewportEnd; ++blockIndex)
         {
             auto placement = preparedDocument.geometry.At(blockIndex);
@@ -97,7 +100,8 @@ namespace winrt::Folia
                     inlineImages,
                     drawMath,
                     drawMathFallback,
-                    nonInteractiveRegions);
+                    nonInteractiveRegions,
+                    floatingPreview);
                 continue;
             }
             auto flowContainer = !block.inline_items.empty()
@@ -134,21 +138,8 @@ namespace winrt::Folia
                 && block.block_style.background)
                 resources.d2dContext->FillRectangle(rect, resources.panelBrush.Get());
             documentPainter.DrawFlowDecorations(prepared.layout.Get(), origin, block, prepared.display);
-            DrawInlinePresentationBackgrounds(
-                resources,
-                styleSheet,
-                prepared.layout.Get(),
-                origin,
-                prepared.display.ranges);
-            documentPainter.DrawSelection(prepared.layout.Get(), origin, prepared.display.displayToSource);
-            documentPainter.DrawSearchHighlights(
-                prepared.layout.Get(), origin, prepared.display.displayToSource);
-            if (prepared.layout)
-                resources.d2dContext->DrawTextLayout(
-                    origin,
-                    prepared.layout.Get(),
-                    prepared.code ? resources.codeBrush.Get() : resources.textBrush.Get(),
-                    D2D1_DRAW_TEXT_OPTIONS_CLIP);
+            documentPainter.DrawInlineText(prepared.layout.Get(), origin, prepared.display, prepared.display.displayToSource,
+                prepared.code ? resources.codeBrush.Get() : resources.textBrush.Get());
             documentPainter.DrawTaskCheckboxes(
                 prepared.layout.Get(), origin, prepared.display.taskCheckboxOverlays);
             documentPainter.RegisterFootnotes(
@@ -182,17 +173,16 @@ namespace winrt::Folia
                         mermaidOrigin);
                 }
             }
-            for (auto const& positioned : EditorDocumentPainter::PositionMath(
+            for (auto const& positioned : EditorDocumentPainter::PaintMath(
                     prepared.layout.Get(),
+                    origin,
                     prepared.display.mathOverlays,
-                    contentWidth))
+                    contentWidth, resources, drawMath, drawMathFallback))
             {
                 auto const& overlay = *positioned.overlay;
                 auto mathOrigin = D2D1::Point2F(
                     origin.x + positioned.localX,
                     origin.y + positioned.localTop);
-                if (!drawMath(overlay.fragment, mathOrigin, styleSheet.textColor))
-                    drawMathFallback(overlay.sourceSpan, mathOrigin);
                 interactionMap.mathHits.push_back({
                     D2D1::RectF(
                         mathOrigin.x,
@@ -207,36 +197,18 @@ namespace winrt::Folia
             auto previewTop = origin.y + prepared.textHeight;
             for (auto const& preview : prepared.mathPreviews)
             {
+                if (preview.floating) { floatingPreview = &preview; continue; }
                 auto nonInteractiveTop = previewTop;
                 previewTop += 8.0f;
                 auto previewRect = D2D1::RectF(
                     documentLeft + paddingLeft,
                     previewTop,
                     documentLeft + paddingLeft + contentWidth,
-                    previewTop + preview.height + 16.0f);
+                    previewTop + preview.Height() + 16.0f);
                 resources.d2dContext->FillRectangle(previewRect, resources.nestedQuoteBrush.Get());
-                auto previewOrigin = D2D1::Point2F(previewRect.left + 8.0f, previewRect.top + 8.0f);
-                if (preview.layout)
-                    resources.d2dContext->DrawTextLayout(
-                        previewOrigin,
-                        preview.layout.Get(),
-                        resources.textBrush.Get(),
-                        D2D1_DRAW_TEXT_OPTIONS_CLIP);
-                auto previewContentWidth = (std::max)(
-                    1.0f,
-                    previewRect.right - previewRect.left - 16.0f);
-                for (auto const& positioned : EditorDocumentPainter::PositionMath(
-                        preview.layout.Get(),
-                        preview.display.mathOverlays,
-                        previewContentWidth))
-                {
-                    auto const& overlay = *positioned.overlay;
-                    auto mathOrigin = D2D1::Point2F(
-                        previewOrigin.x + positioned.localX,
-                        previewOrigin.y + positioned.localTop);
-                    if (!drawMath(overlay.fragment, mathOrigin, styleSheet.textColor))
-                        drawMathFallback(overlay.sourceSpan, mathOrigin);
-                }
+                auto previewOrigin = D2D1::Point2F(
+                    previewRect.left + (contentWidth - preview.Width()) * .5f, previewRect.top + 8.0f);
+                PaintMathPreviewContent(preview, previewOrigin, resources, styleSheet, drawMath, drawMathFallback);
                 nonInteractiveRegions.push_back(D2D1::RectF(
                     previewRect.left,
                     nonInteractiveTop,
@@ -293,15 +265,32 @@ namespace winrt::Folia
             draggedTableAction,
             tableDropIndex);
         if (!printMode) DrawSnippetPlaceholders(frame.snippetPlaceholders);
-        if (!printMode && selection.is_caret())
+        if (!printMode)
         {
-            if (auto rect = interactionMap.CaretBounds(caret, styleSheet.body.lineHeight))
+            auto rect = selection.is_caret() ? interactionMap.CaretBounds(caret, styleSheet.body.lineHeight) : std::nullopt;
+            auto visual = caretAnimation.Sample(rect, caret, scrollOffset, EditorCaretAnimation::Now(), frame.renderModel.revision);
+            if (visual.opacity > 0) {
+                resources.caretBrush->SetOpacity(visual.opacity);
                 resources.d2dContext->DrawLine(
-                    D2D1::Point2F(rect->left, rect->top),
-                    D2D1::Point2F(rect->left, rect->bottom),
+                    D2D1::Point2F(visual.bounds.left, visual.bounds.top),
+                    D2D1::Point2F(visual.bounds.left, visual.bounds.bottom),
                     resources.caretBrush.Get(),
-                    1.5f);
+                    styleSheet.editor.caret_width);
+                resources.caretBrush->SetOpacity(1);
+            }
         }
+        // Paint after every document block: the preview never enters geometry,
+        // line-breaking, selection mapping or table-row height calculation.
+        if (!printMode && floatingPreview) if (auto anchor = interactionMap.CaretBounds(caret, styleSheet.body.lineHeight)) {
+            auto anchorX = anchor->left;
+            for (auto const& range : interactionMap.TextRangeBounds(floatingPreview->contentSpan))
+                if (range.top <= anchor->top + 1 && range.bottom >= anchor->bottom - 1) { anchorX = range.left; break; }
+            if (auto bounds = PaintInlineMathPreview(*floatingPreview, *anchor, anchorX, resources, styleSheet, drawMath, drawMathFallback)) {
+                nonInteractiveRegions.push_back(*bounds);
+                return bounds;
+            }
+        }
+        return std::nullopt;
     }
 
     void EditorDocumentRenderPass::DrawSnippetPlaceholders(

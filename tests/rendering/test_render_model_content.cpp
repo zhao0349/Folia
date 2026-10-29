@@ -9,22 +9,22 @@
 #include <vector>
 
 #include "support/folia_test.hpp"
-import folia.core.parser;
+import folia.markdown.parser;
 import folia.core.document_edit;
-import folia.core.document;
-import folia.core.document_symbols;
-import folia.core.inline_parser;
+import folia.markdown.document;
+import folia.markdown.document_symbols;
+import folia.markdown.inline_parser;
 import folia.core.render_builder;
 import folia.core.render_model;
-import folia.core.ast;
-import folia.core.block_source;
-import folia.core.block_tree;
-import folia.core.callout;
+import folia.markdown.ast;
+import folia.markdown.block_source;
+import folia.markdown.block_tree;
+import folia.markdown.callout;
 import folia.core.text_measurer;
 import folia.core.block_layout;
 import folia.core.hit_test;
 import folia.core.selection_geometry;
-import folia.core.selection;
+import folia.markdown.selection;
 
 using namespace folia;
 using namespace boost::ut;
@@ -403,6 +403,20 @@ suite render_model_content_tests = [] {
     expect(fatal(separating_spaces == 2u));
 };
 
+"adjacent_html_paragraphs_keep_independent_alignment_in_one_html_block"_test = [] {
+    const auto model = build_model(
+        "<p align='center'>first</p>\n<p align='right'>second</p>");
+    expect(fatal(model.blocks.size() == 1u));
+    const auto& children = model.blocks.front().child_blocks;
+    expect(fatal(children.size() == 2u));
+    expect(children[0].block_style.text_alignment == std::optional{TextAlignment::Center});
+    expect(children[1].block_style.text_alignment == std::optional{TextAlignment::End});
+    expect(fatal(!children[0].inline_items.empty()));
+    expect(fatal(!children[1].inline_items.empty()));
+    expect(children[0].inline_items.front().text == U"first");
+    expect(children[1].inline_items.front().text == U"second");
+};
+
 "math_inside_emphasis_renders_without_inheriting_text_style"_test = [] {
     auto m = build_model("**before $x$ after** *\\(y\\)* ~~$z$~~\n- **$q$**\n");
     std::vector<InlineRenderItem> math;
@@ -448,7 +462,7 @@ suite render_model_content_tests = [] {
     bool code = false;
     bool strike = false;
     for (auto const& item : m.blocks[0].special().table_cells[0]) bold = bold || item.style.bold;
-    for (auto const& item : m.blocks[0].special().table_cells[2]) code = code || item.style.code;
+    for (auto const& item : m.blocks[0].special().table_cells[2]) code = code || item.style.code == CodeStyle::Inline;
     for (auto const& item : m.blocks[0].special().table_cells[3]) strike = strike || item.style.strikethrough;
     expect(fatal(bool(bold)));
     expect(fatal(bool(code)));

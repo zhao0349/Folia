@@ -12,6 +12,7 @@ import folia.platform.editor_scroll_state;
 #include "editor/rendering/EditorMathPreparation.h"
 #include "editor/rendering/EditorRenderCache.h"
 #include "editor/rendering/EditorRenderResources.h"
+#include "editor/rendering/EditorCaretAnimation.h"
 #include "export/EditorPdfExportTypes.h"
 
 namespace winrt::Folia
@@ -29,6 +30,7 @@ namespace winrt::Folia
     using folia::platform::editor::EditorVisualTableCell;
 
     struct EditorPreparedDocument;
+    enum class EditorScrollAlignment { Nearest, Start };
 
     struct EditorSurfaceRenderer
     {
@@ -56,12 +58,17 @@ namespace winrt::Folia
         void AdoptMathPreparation(std::unique_ptr<EditorMathPreparation> preparation);
         void SetMathPreparationStopToken(std::stop_token stop);
         void ResetDocumentCaches();
+        MathJaxRenderer TakeMathCache();
+        void RestoreMathCache(MathJaxRenderer cache);
         void SetInvalidateCallback(std::function<void()> callback);
 
+        std::optional<D2D1_RECT_F> InlineMathPreviewBounds() const noexcept { return inlineMathPreviewBounds; }
         std::optional<folia::TextPosition> HitTest(float x, float y) const;
+        std::optional<folia::TextPosition> ViewportPosition() const;
         std::optional<folia::TextPosition> TaskCheckboxAt(float x, float y) const;
         std::optional<EditorVisualFootnoteHit> FootnoteAt(float x, float y) const;
         std::optional<EditorVisualRawBlock> RawBlockFor(folia::NodeId owner) const;
+        std::optional<EditorVisualRawBlock> CodeLanguageAt(float x, float y) const;
         std::optional<D2D1_RECT_F> CaretBounds(folia::TextPosition position) const;
         std::optional<folia::TextPosition> MoveCaretVertically(folia::TextPosition position, bool down, float& goalX) const;
         std::optional<folia::TextPosition> VisualLineStart(folia::TextPosition position) const;
@@ -79,7 +86,10 @@ namespace winrt::Folia
         float MaximumScrollOffset() const;
         float ViewportHeight() const;
         HANDLE FrameLatencyWaitableObject() const;
-        bool ScrollToPosition(folia::TextPosition position);
+        void FocusCaret(bool focused) { caretAnimation.Focus(focused); }
+        void ConfigureCaret(bool animations, double blinkHalfPeriod) { caretAnimation.Configure(styleSheet.editor, animations, blinkHalfPeriod); }
+        EditorCaretFrame const& CaretAnimationFrame() const { return caretAnimation.Frame(); }
+        bool ScrollToPosition(folia::TextPosition position, EditorScrollAlignment alignment = EditorScrollAlignment::Nearest);
 
     private:
         struct PdfExportState;
@@ -89,6 +99,7 @@ namespace winrt::Folia
             std::optional<float> sourceTopOverride = std::nullopt);
         void ClearPreparedDocument();
         void AttachMathCompletion();
+        std::function<void()> EmbeddedCompletionCallback();
 
         void Invalidate();
 
@@ -97,6 +108,8 @@ namespace winrt::Folia
             std::mutex mutex;
             std::function<void()> callback;
             bool active = true;
+            bool repaintQueued = false;
+            bool embeddedQueued = false;
         };
 
         using VisualBlock = EditorVisualBlock;
@@ -113,12 +126,13 @@ namespace winrt::Folia
         SvgNormalizer svgNormalizer;
         TreeSitterHighlighter treeSitter;
         std::shared_ptr<InvalidationState> invalidationState = std::make_shared<InvalidationState>();
-        std::atomic_bool embeddedCompletionPending = false;
         folia::ThemeProfile themeProfile = folia::default_theme_profile();
         std::uint64_t themeRevision = 1;
         EditorStyleSheet styleSheet = CreateEditorStyleSheet(themeProfile);
         EditorInteractionMap interactionMap;
+        EditorCaretAnimation caretAnimation;
         std::vector<D2D1_RECT_F> nonInteractiveRegions;
+        std::optional<D2D1_RECT_F> inlineMathPreviewBounds;
         std::unique_ptr<EditorPreparedDocument> preparedDocument;
         std::shared_ptr<PdfExportState> pdfExportState;
         std::uint64_t embeddedGeneration = 0;

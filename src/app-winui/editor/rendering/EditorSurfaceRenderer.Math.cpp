@@ -1,7 +1,7 @@
 #include "pch.h"
 
 import std;
-import folia.core.utf;
+import folia.markdown.utf;
 #include "editor/rendering/EditorSurfaceRenderer.h"
 #include "editor/rendering/EditorContentGeometry.h"
 #include "editor/rendering/EditorContentPreparation.h"
@@ -28,20 +28,19 @@ namespace winrt::Folia
         result->context = context;
         auto sheet = CreateEditorStyleSheet(context.theme);
         auto width = EditorDocumentContentWidth(context.surfaceWidth, sheet.horizontalPadding);
-        auto color = SvgColor(sheet.textColor);
         auto batch = result->math.BeginBatch();
-        std::size_t batchSize = 0;
-        auto formula = [&](std::u32string_view tex, bool display, float available)
+        auto formula = [&](std::u32string_view tex, bool display, float available, D2D1_COLOR_F foreground)
         {
             if (stop.stop_requested()) throw winrt::hresult_canceled();
             batch.Render(folia::cps_to_utf8(tex), display, sheet.body.size,
-                available, color, stop);
+                available, SvgColor(foreground), stop);
             ++result->formulaCount;
-            if (++batchSize == 32)
+            // Count newly staged renders, rather than repeated occurrences.
+            // Source-model chunks do not delimit a native/font request.
+            if (batch.Size() == 32)
             {
                 batch.Submit();
                 result->math.WaitForIdle(stop);
-                batchSize = 0;
             }
         };
         auto inlines = [&](auto const& self, std::vector<folia::InlineRenderItem> const& items, float available) -> void
@@ -49,7 +48,8 @@ namespace winrt::Folia
             for (auto const& item : items)
             {
                 if (item.kind == folia::InlineRenderItem::Kind::Math)
-                    formula(item.text, item.special().display == folia::MathDisplayMode::Block, available);
+                    formula(item.text, item.special().display == folia::MathDisplayMode::Block, available,
+                        InlineForeground(item.style, sheet.textColor));
                 else if (item.kind == folia::InlineRenderItem::Kind::Link)
                     self(self, item.special().semantic().children, available);
             }
@@ -59,7 +59,7 @@ namespace winrt::Folia
             if (source.source_mode || source.source_code) return;
             auto contentWidth = EditorBlockContentWidth(source, available);
             if (source.kind == folia::RenderBlockKind::Math)
-                formula(source.special().tex, true, contentWidth);
+                formula(source.special().tex, true, contentWidth, sheet.textColor);
             else if (source.kind == folia::RenderBlockKind::Table)
             {
                 auto const& special = source.special();
@@ -88,11 +88,8 @@ namespace winrt::Folia
                 if (progress) progress(index + 1, count);
             }
             if (frame.releaseBlocksOutside) frame.releaseBlocksOutside(end, end);
-            // Do not retain a document-sized backlog of TeX/source jobs while
-            // the native worker is slower than the existing render-model walk.
-            batch.Submit();
-            result->math.WaitForIdle(stop);
-            batchSize = 0;
+            // Model materialization remains bounded independently of the
+            // at-most-32 staged native requests, even for sparse formulas.
         }
         batch.Submit();
         result->math.WaitForIdle(stop);

@@ -8,21 +8,21 @@
 #include <vector>
 
 #include "support/folia_test.hpp"
-import folia.core.ast;
-import folia.core.block_source;
-import folia.core.block_tree;
-import folia.core.document;
+import folia.markdown.ast;
+import folia.markdown.block_source;
+import folia.markdown.block_tree;
+import folia.markdown.document;
 import folia.core.document_edit;
 import folia.core.document_history;
 import folia.core.document_ids;
 import folia.core.document_operation_apply;
-import folia.core.document_symbols;
-import folia.core.document_text;
-import folia.core.inline_cst;
-import folia.core.inline_document;
-import folia.core.parser;
-import folia.core.serializer;
-import folia.core.text_edit;
+import folia.markdown.document_symbols;
+import folia.markdown.document_text;
+import folia.markdown.inline_cst;
+import folia.markdown.inline_document;
+import folia.markdown.parser;
+import folia.markdown.serializer;
+import folia.markdown.text_edit;
 
 using namespace folia;
 using namespace boost::ut;
@@ -88,6 +88,8 @@ suite document_boundary_tests = [] {
 
 "callout_title_boundaries_use_tree_split_join_and_unwrap"_test = [] {
     auto document = parse_document("> [!NOTE] title\n> body");
+    // The complete physical header ending belongs to this structural boundary.
+    expect(bool(document.root.children.front().children[1].separator_before==std::optional<std::u32string>{U"\n"}));
     const auto callout_id = document.root.children.front().id;
     const auto title_id = document.root.children.front().children.front().id;
 
@@ -172,7 +174,7 @@ suite document_boundary_tests = [] {
             expect(fatal(bool(quote.children[0].id == title_id)));
             expect(fatal(bool(quote.children[0].inline_content.source == U"title\nbody")));
         }
-        expect(fatal(bool(serialize_markdown(unwrapped->after) == "> title\n> body")));
+        expect(bool(serialize_markdown(unwrapped->after) == "> title\n> body")) << serialize_markdown(unwrapped->after);
         expect_document_valid(unwrapped->after);
     }
 };

@@ -1,22 +1,27 @@
+#include <unordered_map>
+#include <unordered_set>
 #include <algorithm>
 #include <cstddef>
 #include <string>
 #include <vector>
 
 #include "support/folia_test.hpp"
-import folia.core.parser;
-import folia.core.ast;
-import folia.core.ids;
-import folia.core.inline_document;
-import folia.core.block_source;
-import folia.core.serializer;
-import folia.core.utf;
-import folia.core.text_edit;
+import folia.markdown.parser;
+import folia.markdown.ast;
+import folia.markdown.ids;
+import folia.markdown.inline_document;
+import folia.markdown.block_source;
+import folia.markdown.serializer;
+import folia.markdown.utf;
+import folia.markdown.text_edit;
+import folia.markdown.markdown_html;
 
 using namespace folia;
 using namespace boost::ut;
 
 #include "support/parser_test_support.hpp"
+import folia.markdown.dialect;
+import folia.markdown.inline_cst;
 #include "support/commonmark_projection.hpp"
 
 suite tab_column_context_tests = [] {

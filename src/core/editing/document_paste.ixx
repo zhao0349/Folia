@@ -1,20 +1,21 @@
 // folia.core.document_paste — semantic Markdown parsing and block-tree splicing.
 export module folia.core.document_paste;
 import std;
-import folia.core.ast;
-import folia.core.block_tree;
-import folia.core.document;
+import folia.markdown.ast;
+import folia.markdown.block_tree;
+import folia.markdown.document;
+import folia.core.document_ids;
 import folia.core.document_edit_support;
 import folia.core.document_source_edit;
-import folia.core.document_text;
-import folia.core.container_source;
+import folia.markdown.document_text;
+import folia.markdown.container_source;
 import folia.core.document_container_source;
-import folia.core.inline_cst;
-import folia.core.inline_document;
-import folia.core.inline_parser;
-import folia.core.parser;
-import folia.core.text_edit;
-import folia.core.utf;
+import folia.markdown.inline_cst;
+import folia.markdown.inline_document;
+import folia.markdown.inline_parser;
+import folia.markdown.parser;
+import folia.markdown.text_edit;
+import folia.markdown.utf;
 
 export namespace folia {
 
@@ -34,49 +35,8 @@ inline std::u32string normalize_newlines(std::u32string_view text) {
     return result;
 }
 
-inline void assign_fresh_ids(
-    InlineCstNodes& nodes,
-    document_edit_detail::NodeAllocator& allocator) {
-    for (auto& node : nodes) {
-        node.id = allocator.allocate();
-        assign_fresh_ids(node.children, allocator);
-    }
-}
-
-inline void assign_fresh_ids(
-    InlineDocument& document,
-    document_edit_detail::NodeAllocator& allocator) {
-    assign_fresh_ids(document.tree.nodes, allocator);
-}
-
-inline void assign_fresh_ids(
-    BlockNode& block,
-    document_edit_detail::NodeAllocator& allocator,
-    std::unordered_map<std::uint64_t, NodeId>& id_map) {
-    const auto old_id = block.id;
-    block.id = allocator.allocate();
-    id_map.insert_or_assign(old_id.v, block.id);
-    if (auto* inline_document = editable_inline_document(block)) {
-        assign_fresh_ids(*inline_document, allocator);
-    }
-    for (auto& child : block.children) assign_fresh_ids(child, allocator, id_map);
-}
-
-inline void assign_fresh_ids(
-    BlockNode& block,
-    document_edit_detail::NodeAllocator& allocator) {
-    std::unordered_map<std::uint64_t, NodeId> id_map;
-    assign_fresh_ids(block, allocator, id_map);
-    walk_blocks(block, [&](BlockNode& owner) {
-        if (!owner.has_container_source()) return;
-        auto& lines = owner.ensure_container_source().lines;
-        for (auto& line : lines) {
-            if (const auto found = id_map.find(line.anchor.owner_id.v);
-                found != id_map.end()) {
-                line.anchor.owner_id = found->second;
-            }
-        }
-    });
+inline void assign_fresh_ids(BlockNode& block,document_edit_detail::NodeAllocator& allocator) {
+    assign_fresh_document_ids(*allocator.document,block);
 }
 
 inline bool record_insert(
@@ -271,8 +231,8 @@ inline char32_t unordered_marker(const BlockNode& list) {
 }
 
 inline bool paste_compatible_lists(const BlockNode& current, const BlockNode& pasted) {
-    if (current.kind != pasted.kind
-        || (current.kind != BlockKind::List && current.kind != BlockKind::TaskList)) {
+    if ((current.kind != BlockKind::List && current.kind != BlockKind::TaskList)
+        || (pasted.kind != BlockKind::List && pasted.kind != BlockKind::TaskList)) {
         return false;
     }
     if (current.list_special().ordered != pasted.list_special().ordered) return false;
@@ -330,7 +290,7 @@ inline std::optional<TextPosition> paste_matching_list(
     auto* current_item = find_block(document.root, context.item_id);
     auto* head = find_block(document.root, head_id);
     if (!current_list || !current_item || !head) return std::nullopt;
-    const auto can_fold = current_list->kind != BlockKind::TaskList
+    const auto can_fold = current_item->kind != BlockKind::TaskListItem
         && !pasted_list.children.empty()
         && !pasted_list.children.front().children.empty()
         && pasted_list.children.front().children.front().kind == BlockKind::Paragraph;

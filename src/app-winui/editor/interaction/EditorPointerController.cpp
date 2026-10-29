@@ -73,9 +73,14 @@ namespace winrt::Folia
     void EditorPointerController::PointerPressed(winrt::Microsoft::UI::Xaml::Input::PointerRoutedEventArgs const& args)
     {
         if (!session_ || !renderer_ || !surface_) return;
+        // Primary contact covers mouse-left, touch and the pen tip. Secondary
+        // input belongs to the context menu and must not start selection,
+        // capture the pointer, activate links or execute table/task actions.
+        auto pointerPoint = args.GetCurrentPoint(surface_);
+        if (!pointerPoint.Properties().IsLeftButtonPressed()) return;
         surface_.Focus(winrt::Microsoft::UI::Xaml::FocusState::Pointer);
         if (resetCaretGoal_) resetCaretGoal_();
-        auto point = args.GetCurrentPoint(surface_).Position();
+        auto point = pointerPoint.Position();
         if (scroll_) scroll_->Stop();
         renderer_->UpdatePointer(static_cast<float>(point.X), static_cast<float>(point.Y));
         if (auto action = renderer_->TableActionAt(static_cast<float>(point.X), static_cast<float>(point.Y)))
@@ -145,7 +150,7 @@ namespace winrt::Folia
                 return;
             }
         }
-        selectionDrag_.Begin(*hit);
+        selectionDrag_.Begin(*hit, static_cast<float>(point.X), static_cast<float>(point.Y));
         surface_.CapturePointer(args.Pointer());
         if (render_) render_();
         args.Handled(true);
@@ -166,7 +171,8 @@ namespace winrt::Folia
             auto hit = renderer_->HitTest(static_cast<float>(point.X), static_cast<float>(point.Y));
             auto interaction = hit && session_ ? session_->InteractionAt(*hit) : std::nullopt;
             auto tooltip = interaction ? std::move(interaction->tooltip) : std::nullopt;
-            SetLinkCursor(interaction && interaction->link.has_value());
+            SetLinkCursor((interaction && interaction->link.has_value())
+                || renderer_->CodeLanguageAt(static_cast<float>(point.X), static_cast<float>(point.Y)).has_value());
             if (tooltip != hoverTooltip_)
             {
                 hoverTooltip_ = tooltip;
@@ -191,8 +197,8 @@ namespace winrt::Folia
             return;
         }
         SetLinkCursor(false);
-        selectionDrag_.Update(static_cast<float>(point.X), static_cast<float>(point.Y));
-        if (render_) render_();
+        auto changed = selectionDrag_.Update(static_cast<float>(point.X), static_cast<float>(point.Y));
+        if ((changed || hoverVisualChanged) && render_) render_();
         args.Handled(true);
     }
 
@@ -228,8 +234,9 @@ namespace winrt::Folia
         if (selectionDrag_.Active())
         {
             auto point = args.GetCurrentPoint(surface_).Position();
-            selectionDrag_.Finish(static_cast<float>(point.X), static_cast<float>(point.Y));
+            auto changed = selectionDrag_.Finish(static_cast<float>(point.X), static_cast<float>(point.Y));
             surface_.ReleasePointerCapture(args.Pointer());
+            if (changed && render_) render_();
             args.Handled(true);
         }
     }

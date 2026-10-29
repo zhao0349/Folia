@@ -5,26 +5,26 @@
 #include <vector>
 
 #include "support/folia_test.hpp"
-import folia.core.ast;
-import folia.core.block_source;
-import folia.core.block_tree;
+import folia.markdown.ast;
+import folia.markdown.block_source;
+import folia.markdown.block_tree;
 import folia.core.command;
-import folia.core.dialect;
-import folia.core.document;
+import folia.markdown.dialect;
+import folia.markdown.document;
 import folia.core.document_edit;
 import folia.core.document_ids;
-import folia.core.document_text;
+import folia.markdown.document_text;
 import folia.core.editor;
-import folia.core.inline_cst;
-import folia.core.inline_document;
-import folia.core.instrumentation;
+import folia.markdown.inline_cst;
+import folia.markdown.inline_document;
+import folia.markdown.instrumentation;
 import folia.core.input;
 import folia.core.render_builder;
 import folia.core.render_model;
-import folia.core.serializer;
-import folia.core.text_edit;
+import folia.markdown.serializer;
+import folia.markdown.text_edit;
 import folia.core.theme;
-import folia.core.utf;
+import folia.markdown.utf;
 
 using namespace folia;
 using namespace boost::ut;
@@ -567,6 +567,34 @@ suite editor_table_property_tests = [] {
         editor.set_selection(before);
         const auto before_markdown = editor.markdown_utf8();
 
+        if (insert) expected.insert(offset, 1, U'X');
+        else {
+            expected.erase(offset - 1, 1);
+            // The command removes a complete formatting pair when its target
+            // is a delimiter. Build the oracle from the original CST, before
+            // mutation; ordinary/incomplete text still loses one character.
+            const auto* original_block = find_block(editor.document().root, owner->container_id);
+            std::vector<const InlineCstNode*> pending;
+            for (const auto& node : original_block->inline_content.tree.nodes) pending.push_back(&node);
+            while (!pending.empty()) {
+                const auto* node = pending.back(); pending.pop_back();
+                for (const auto& child : node->children) pending.push_back(&child);
+                if (node->status != ParseStatus::Complete || !node->delimited || !node->delimited->closing) continue;
+                const auto paired = node->kind == InlineCstKind::Emphasis || node->kind == InlineCstKind::Strong
+                    || node->kind == InlineCstKind::Strikethrough || node->kind == InlineCstKind::CodeSpan
+                    || node->kind == InlineCstKind::InlineMath;
+                const auto& parts = *node->delimited;
+                const auto character = offset - 1;
+                const auto in_marker = (character >= parts.opening.start && character < parts.opening.end)
+                    || (character >= parts.closing->start && character < parts.closing->end);
+                if (!paired || !in_marker) continue;
+                expected = original.substr(0, node->range.start)
+                    + original.substr(parts.content.start, parts.content.length())
+                    + original.substr(node->range.end);
+                break;
+            }
+        }
+
         reset_core_operation_counters();
         auto transaction = insert
             ? editor.execute_document_insert_text(editor.selection(), U"X")
@@ -579,8 +607,6 @@ suite editor_table_property_tests = [] {
         expect(fatal(bool(counters.full_tree_transaction_diffs == 0u))) << iteration;
         expect(fatal(bool(counters.inline_reparses == 1u))) << iteration;
 
-        if (insert) expected.insert(offset, 1, U'X');
-        else expected.erase(offset - 1, 1);
         const auto* block = find_block(editor.document().root, owner->container_id);
         expect(fatal(bool(block != nullptr))) << iteration;
         if (!block) continue;

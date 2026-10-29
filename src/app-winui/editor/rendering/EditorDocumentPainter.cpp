@@ -1,11 +1,80 @@
 #include "pch.h"
 #include "EditorDocumentPainter.h"
+#include "EditorTextLayoutEngine.h"
+#include "EditorMathSyntax.h"
 
-import folia.core.callout;
-import folia.core.utf;
+import folia.markdown.callout;
+import folia.markdown.utf;
 
 namespace winrt::Folia
 {
+    void EditorDocumentPainter::DrawInlineText(IDWriteTextLayout* layout, D2D1_POINT_2F origin,
+        DisplayInlineText const& display, EditorDisplayMapping const& mapping, ID2D1Brush* textBrush)
+    {
+        if (!layout) return;
+        DrawInlinePresentationBackgrounds(resources, styleSheet, layout, origin, display.ranges);
+        PaintMathBrackets(resources, styleSheet, layout, origin, display, mapping);
+        DrawSyntaxMarkers(layout, origin, display);
+        DrawSelection(layout, origin, mapping);
+        DrawSearchHighlights(layout, origin, mapping);
+        resources.d2dContext->DrawTextLayout(origin, layout, textBrush, D2D1_DRAW_TEXT_OPTIONS_CLIP);
+    }
+
+    std::vector<EditorDocumentPainter::PositionedMath> EditorDocumentPainter::PaintMath(
+        IDWriteTextLayout* layout, D2D1_POINT_2F origin,
+        std::vector<DisplayInlineText::MathOverlay> const& overlays, float width,
+        EditorRenderResources& resources, EditorDrawMath const& draw, EditorDrawMathFallback const& fallback,
+        float scale)
+    {
+        auto positioned = PositionMath(layout, overlays, width);
+        for (auto const& item : positioned) {
+            auto at = D2D1::Point2F(origin.x + item.localX * scale, origin.y + item.localTop * scale);
+            if (!draw(item.overlay->fragment, at, item.overlay->foreground, scale)) fallback(item.overlay->sourceSpan, at);
+        }
+        if (std::none_of(positioned.begin(), positioned.end(), [](auto const& item) { return item.overlay->strikethrough; }))
+            return positioned;
+        std::vector<bool> decorated(positioned.size(), false);
+        for (std::size_t i = 0; i < positioned.size(); ++i) {
+            auto const& first = positioned[i];
+            if (decorated[i] || !first.overlay->strikethrough) continue;
+            auto box = D2D1::RectF(first.localX - first.overlay->leadingSpace, first.localTop,
+                first.localX + first.overlay->fragment.width, first.localTop + first.overlay->fragment.height);
+            for (std::size_t j = i; j < positioned.size(); ++j) {
+                auto const& next = positioned[j];
+                auto const& a = first.overlay->sourceSpan; auto const& b = next.overlay->sourceSpan;
+                if (!next.overlay->strikethrough || next.line != first.line || a.container_id != b.container_id
+                    || a.source_range.start != b.source_range.start || a.source_range.end != b.source_range.end) continue;
+                decorated[j] = true;
+                box.left = (std::min)(box.left, next.localX - next.overlay->leadingSpace);
+                box.right = (std::max)(box.right, next.localX + next.overlay->fragment.width);
+                box.top = (std::min)(box.top, next.localTop);
+                box.bottom = (std::max)(box.bottom, next.localTop + next.overlay->fragment.height);
+            }
+            auto y = origin.y + (box.top + (box.bottom - box.top) * .52f) * scale;
+            resources.mathDecorationBrush->SetColor(first.overlay->foreground);
+            resources.d2dContext->DrawLine({origin.x + box.left * scale, y}, {origin.x + box.right * scale, y},
+                resources.mathDecorationBrush.Get(), 1.5f * scale);
+        }
+        return positioned;
+    }
+
+    void EditorDocumentPainter::DrawSyntaxMarkers(
+        IDWriteTextLayout* layout, D2D1_POINT_2F origin, DisplayInlineText const& display)
+    {
+        if (!layout) return;
+        for (auto const& range : display.ranges)
+        {
+            if (range.icon == SyntaxIcon::None) continue;
+            auto rectangles = SyntaxIconRectangles(layout, range, origin);
+            for (auto rect : rectangles)
+            {
+                if (rect.bottom <= rect.top || rect.right <= rect.left) continue;
+                resources.syntaxIcons.Draw(resources.d2dContext.Get(), range.icon, rect,
+                    styleSheet.markerColor, styleSheet.markerAssets);
+            }
+        }
+    }
+
     EditorDocumentPainter::EditorDocumentPainter(
         EditorRenderResources& resources,
         EditorStyleSheet const& styleSheet,
@@ -153,16 +222,26 @@ namespace winrt::Folia
         float width)
     {
         std::vector<PositionedMath> positioned;
-        if (!layout) return positioned;
+        if (!layout || overlays.empty()) return positioned;
         positioned.reserve(overlays.size());
+        UINT32 count = 0;
+        layout->GetLineMetrics(nullptr, 0, &count);
+        std::vector<DWRITE_LINE_METRICS> lines(count);
+        if (count) layout->GetLineMetrics(lines.data(), count, &count);
+        std::vector<UINT32> ends;
+        UINT32 end = 0;
+        for (auto const& line : lines) { end += line.length; ends.push_back(end); }
         for (auto const& overlay : overlays)
         {
             FLOAT x = 0.0f;
             FLOAT lineY = 0.0f;
             DWRITE_HIT_TEST_METRICS metrics{};
             if (FAILED(layout->HitTestTextPosition(overlay.displayStart, FALSE, &x, &lineY, &metrics))) continue;
-            positioned.push_back({&overlay, x + overlay.leadingSpace, metrics.top});
+            auto line = std::upper_bound(ends.begin(), ends.end(), overlay.displayStart) - ends.begin();
+            positioned.push_back({&overlay, x + overlay.leadingSpace, metrics.top, static_cast<std::size_t>(line)});
         }
+        if (std::none_of(overlays.begin(), overlays.end(), [](auto const& overlay) { return overlay.displayMath; }))
+            return positioned;
         auto sameSpan = [](folia::TextSpan const& left, folia::TextSpan const& right)
         {
             return left.container_id == right.container_id
@@ -183,7 +262,7 @@ namespace winrt::Folia
                 auto const* candidate = positioned[other].overlay;
                 if (!candidate || !candidate->displayMath
                     || !sameSpan(candidate->sourceSpan, overlay->sourceSpan)
-                    || std::fabs(positioned[other].localTop - positioned[index].localTop) > 0.5f) continue;
+                    || positioned[other].line != positioned[index].line) continue;
                 left = (std::min)(left, positioned[other].localX);
                 right = (std::max)(right, positioned[other].localX + candidate->fragment.width);
                 lineInset = (std::min)(
@@ -307,7 +386,7 @@ namespace winrt::Folia
                     auto end = DisplayPositionForSource(display.displayToSource, {block.id, sourceEnd, folia::TextAffinity::Downstream});
                     if (end <= start) continue;
                     folia::InlineStyle style = folia::InlineStyle::plain();
-                    style.code = true;
+                    style.code = folia::CodeStyle::Block;
                     display.ranges.push_back({
                         static_cast<UINT32>(start),
                         static_cast<UINT32>(end - start),
@@ -386,6 +465,17 @@ namespace winrt::Folia
                 top = (std::min)(top, metrics[index].top);
                 bottom = (std::max)(bottom, metrics[index].top + metrics[index].height);
             }
+            // Character hit rectangles do not cover the zero-character row
+            // after a terminal line break. The range owning the layout end
+            // also owns that caret row; measure it through the same layout.
+            if (displayEnd == displayLimit) {
+                FLOAT x = 0, y = 0;
+                DWRITE_HIT_TEST_METRICS end{};
+                if (SUCCEEDED(layout->HitTestTextPosition(static_cast<UINT32>(displayEnd), FALSE, &x, &y, &end))) {
+                    top = (std::min)(top, origin.y + end.top);
+                    bottom = (std::max)(bottom, origin.y + end.top + end.height);
+                }
+            }
             return true;
         };
         auto calloutBrushes = [&](std::string_view kind)
@@ -420,12 +510,26 @@ namespace winrt::Folia
                 auto range = displayRange(nested);
                 if (range)
                 {
-                    auto contentLeft = contentLeftFor(nested, *range, indentColumns);
+                    // Standalone raw blocks own this layout directly. Flow
+                    // anchors describe children flattened into a container's
+                    // layout and are intentionally absent on these roots.
+                    const auto standaloneRaw = root
+                        && (nested.kind == folia::RenderBlockKind::Code
+                            || nested.kind == folia::RenderBlockKind::Math);
+                    auto contentLeft = standaloneRaw
+                        ? std::optional<float>{origin.x - nested.block_style.padding_left}
+                        : contentLeftFor(nested, *range, indentColumns);
                     float top = (std::numeric_limits<float>::max)();
                     float bottom = (std::numeric_limits<float>::lowest)();
                     if (contentLeft && accumulateRange(*range, top, bottom))
                     {
-                        auto left = (std::clamp)(*contentLeft, origin.x, documentRight);
+                        auto left = standaloneRaw ? *contentLeft
+                            : (std::clamp)(*contentLeft, origin.x, documentRight);
+                        if (standaloneRaw)
+                        {
+                            top -= nested.block_style.padding_top;
+                            bottom += nested.block_style.padding_bottom;
+                        }
                         if (nested.kind == folia::RenderBlockKind::Math)
                         {
                             if (!printMode)
@@ -460,30 +564,36 @@ namespace winrt::Folia
                         }
                         if (rawBlock)
                         {
-                            resources.d2dContext->DrawRoundedRectangle(
-                                D2D1::RoundedRect(rect, 6.0f, 6.0f),
-                                resources.mutedBrush.Get(),
-                                1.0f);
                             auto headerTop = rect.top + nested.block_style.padding_top;
                             auto headerBottom = (std::min)(
                                 rect.bottom, headerTop + styleSheet.code.lineHeight);
-                            if (nested.kind == folia::RenderBlockKind::Code)
+                            float labelWidth = 0;
                             {
                                 auto label = winrt::to_hstring(
                                     nested.special().language.value_or("text"));
-                                resources.d2dContext->DrawTextW(
-                                    label.c_str(),
-                                    static_cast<UINT32>(label.size()),
-                                    resources.codeFormat.Get(),
-                                    D2D1::RectF(left + 8.0f, headerTop, rect.right - 8.0f, headerBottom),
-                                    resources.mutedBrush.Get(),
-                                    D2D1_DRAW_TEXT_OPTIONS_CLIP);
+                                ::Microsoft::WRL::ComPtr<IDWriteTextLayout> labelLayout;
+                                winrt::check_hresult(resources.dwriteFactory->CreateTextLayout(label.c_str(),
+                                    static_cast<UINT32>(label.size()), resources.codeFormat.Get(),
+                                    (std::max)(1.f, rect.right - left - 40), styleSheet.code.lineHeight, labelLayout.GetAddressOf()));
+                                labelLayout->SetWordWrapping(DWRITE_WORD_WRAPPING_NO_WRAP);
+                                DWRITE_TEXT_METRICS labelMetrics{};
+                                labelLayout->GetMetrics(&labelMetrics);
+                                labelWidth = (std::min)(labelMetrics.widthIncludingTrailingWhitespace, labelLayout->GetMaxWidth());
+                                resources.d2dContext->DrawTextLayout({left + 8, headerTop}, labelLayout.Get(),
+                                    resources.mutedBrush.Get(), D2D1_DRAW_TEXT_OPTIONS_CLIP);
+                                if (!printMode && !nested.special().code_indented) {
+                                    auto x = left + 8 + labelWidth + 9;
+                                    auto y = (headerTop + headerBottom) * .5f;
+                                    resources.d2dContext->DrawLine({x - 3, y - 1.5f}, {x, y + 1.5f}, resources.mutedBrush.Get(), 1);
+                                    resources.d2dContext->DrawLine({x, y + 1.5f}, {x + 3, y - 1.5f}, resources.mutedBrush.Get(), 1);
+                                }
                             }
                             if (!printMode)
                             {
                                 interactionMap.rawBlocks.push_back({
                                     rect,
-                                    D2D1::RectF(left, rect.top, rect.right, headerBottom),
+                                    D2D1::RectF(left + 4, headerTop,
+                                        (std::min)(rect.right, left + 8 + labelWidth + 24), headerBottom),
                                     {nested.id, nested.content_span.source_range.start, folia::TextAffinity::Downstream},
                                     nested.kind == folia::RenderBlockKind::Code
                                         ? folia::platform::editor::EditorRawBlockKind::Code

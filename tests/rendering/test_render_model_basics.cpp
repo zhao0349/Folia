@@ -9,22 +9,23 @@
 #include <vector>
 
 #include "support/folia_test.hpp"
-import folia.core.parser;
+import folia.markdown.parser;
+import folia.markdown.dialect;
 import folia.core.document_edit;
-import folia.core.document;
-import folia.core.document_symbols;
-import folia.core.inline_parser;
+import folia.markdown.document;
+import folia.markdown.document_symbols;
+import folia.markdown.inline_parser;
 import folia.core.render_builder;
 import folia.core.render_model;
-import folia.core.ast;
-import folia.core.block_source;
-import folia.core.block_tree;
-import folia.core.callout;
+import folia.markdown.ast;
+import folia.markdown.block_source;
+import folia.markdown.block_tree;
+import folia.markdown.callout;
 import folia.core.text_measurer;
 import folia.core.block_layout;
 import folia.core.hit_test;
 import folia.core.selection_geometry;
-import folia.core.selection;
+import folia.markdown.selection;
 
 using namespace folia;
 using namespace boost::ut;
@@ -32,6 +33,90 @@ using namespace boost::ut;
 #include "support/render_layout_test_support.hpp"
 
 suite render_model_basic_tests = [] {
+
+"code_presentation_role_comes_from_semantic_projection_in_every_container"_test = [] {
+    struct Case { std::string source; CodeStyle role; };
+    for (auto const& example : {
+        Case{"`alpha`\n", CodeStyle::Inline},
+        Case{"# `alpha`\n", CodeStyle::Inline},
+        Case{"- `alpha`\n", CodeStyle::Inline},
+        Case{"- [ ] `alpha`\n", CodeStyle::Inline},
+        Case{"> `alpha`\n", CodeStyle::Inline},
+        Case{"> [!NOTE]\n> `alpha`\n", CodeStyle::Inline},
+        Case{"[^n]: `alpha`\n\nref[^n]\n", CodeStyle::Inline},
+        Case{"| head |\n| --- |\n| `alpha` |\n", CodeStyle::Inline},
+        Case{"<code>alpha</code>\n", CodeStyle::Inline},
+        Case{"`alpha\n", CodeStyle::None},
+        Case{"> ```txt\n> alpha\n> ```\n", CodeStyle::Block}}) {
+        auto model = build_model(example.source);
+        std::size_t matches = 0;
+        auto inspect = [&](auto const& items) {
+            for (auto const& item : items) {
+                if (item.kind != InlineRenderItem::Kind::Text || item.text.find(U"alpha") == std::u32string::npos) continue;
+                ++matches;
+                expect(item.style.code == example.role) << example.source;
+            }
+        };
+        auto walk = [&](auto&& self, RenderBlock const& block) -> void {
+            inspect(block.inline_items);
+            for (auto const& cell : block.special().table_cells) inspect(cell);
+            for (auto const& child : block.child_blocks) self(self, child);
+        };
+        for (auto const& block : model.blocks) walk(walk, block);
+        expect(matches > 0_u) << example.source;
+    }
+};
+
+"mixed_task_list_renders_checkbox_only_for_task_items"_test = [] {
+    auto dialect = default_dialect();
+    dialect.gfm.task_lists = true;
+    auto parsed = parse_text(
+        1,
+        "- [@] regular\n- [x] task\n",
+        dialect);
+    auto model = build_render_model(
+        parsed.document,
+        parsed.outline,
+        parsed.symbols,
+        default_theme_profile());
+    expect(fatal(model.blocks.size() == 1));
+    if (model.blocks.empty()) return;
+    std::size_t checkboxes = 0;
+    std::size_t bullets = 0;
+    for (const auto& item : model.blocks.front().inline_items) {
+        if (item.kind != InlineRenderItem::Kind::Marker) continue;
+        if (item.special().marker_role == MarkerRole::TaskCheckbox) {
+            ++checkboxes;
+            expect(fatal(item.special().task_checked));
+        }
+        if (item.special().marker_role == MarkerRole::ListBullet) ++bullets;
+    }
+    expect(fatal(checkboxes == 1));
+    expect(fatal(bullets == 1));
+};
+
+"ordered_task_item_keeps_the_ordered_list_and_checkbox_markers"_test = [] {
+    auto dialect = default_dialect();
+    dialect.gfm.task_lists = true;
+    auto parsed = parse_text(1, "3. [x] done\n", dialect);
+    auto model = build_render_model(
+        parsed.document,
+        parsed.outline,
+        parsed.symbols,
+        default_theme_profile());
+    expect(fatal(model.blocks.size() == 1));
+    if (model.blocks.empty()) return;
+    bool task_marker = false;
+    for (const auto& item : model.blocks.front().inline_items) {
+        if (item.kind == InlineRenderItem::Kind::Marker
+            && item.special().marker_role == MarkerRole::TaskCheckbox) {
+            task_marker = true;
+            expect(fatal(item.special().task_checked));
+            expect(fatal(item.special().display_text == U"3. [x] "));
+        }
+    }
+    expect(fatal(task_marker));
+};
 
 "list_nested_quote_keeps_structural_layout_metadata"_test = [] {
     auto model = build_model("- item\n  > quoted");
@@ -287,7 +372,7 @@ suite render_model_basic_tests = [] {
         if (item.source_span.container_id != code->id
             || item.kind != InlineRenderItem::Kind::Text) continue;
         displayed += item.text;
-        expect(fatal(bool(item.style.code))) << "code style only";
+        expect(fatal(item.style.code == CodeStyle::Block)) << "block code style only";
         expect(fatal(bool(!item.style.bold && !item.style.italic
             && !item.style.link && !item.style.strikethrough))) << "no markdown inline style";
     }
@@ -340,7 +425,7 @@ suite render_model_basic_tests = [] {
             if (item.special().marker_role == MarkerRole::Structural && !item.special().display_text.empty()
                 && std::all_of(item.special().display_text.begin(), item.special().display_text.end(), [](char32_t value) { return value == U' '; })) {
                 ++line_indents;
-            } else if (item.kind == InlineRenderItem::Kind::Text && item.style.code) {
+            } else if (item.kind == InlineRenderItem::Kind::Text && item.style.code == CodeStyle::Block) {
                 flattened_code += item.text;
             }
         }
@@ -367,7 +452,7 @@ suite render_model_basic_tests = [] {
     }
     bool styled_code = false;
     for (auto const& item : list.inline_items) {
-        if (item.kind == InlineRenderItem::Kind::Text && item.style.code) styled_code = true;
+        if (item.kind == InlineRenderItem::Kind::Text && item.style.code == CodeStyle::Block) styled_code = true;
     }
     expect(fatal(bool(styled_code)));
 };

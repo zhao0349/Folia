@@ -15,7 +15,7 @@ set(CMAKE_EXPERIMENTAL_CXX_IMPORT_STD "451f2fe2-a8a2-47c3-bc32-94786d8fc91b")
 cmake_minimum_required(VERSION 4.0)
 
 project(folia
-    VERSION 0.2.3
+    VERSION 0.5.4
     LANGUAGES C CXX
     DESCRIPTION "Folia: native self-rendered WYSIWYG Markdown editor (C++)")
 
@@ -43,7 +43,6 @@ if(MSVC)
     endif()
 endif()
 
-include_directories(${CMAKE_CURRENT_SOURCE_DIR}/include)
 
 option(FOLIA_BUILD_WINUI "Build the WinUI 3 C++/WinRT application shell" OFF)
 
@@ -54,27 +53,15 @@ endif()
 # ---------------------------------------------------------------------------
 # Core library — pure C++, portable. Acceptance gate: no Windows dependency.
 # ---------------------------------------------------------------------------
-add_library(folia_tree_sitter_html STATIC
-    ${CMAKE_CURRENT_SOURCE_DIR}/third_party/tree-sitter/runtime/lib.c
-    ${CMAKE_CURRENT_SOURCE_DIR}/third_party/tree-sitter/grammars/html_parser.c
-    ${CMAKE_CURRENT_SOURCE_DIR}/third_party/tree-sitter/grammars/html_scanner.c)
-target_include_directories(folia_tree_sitter_html PUBLIC
-    ${CMAKE_CURRENT_SOURCE_DIR}/third_party/tree-sitter/include
-    ${CMAKE_CURRENT_SOURCE_DIR}/third_party/tree-sitter/runtime)
-set_target_properties(folia_tree_sitter_html PROPERTIES
-    C_STANDARD 11
-    C_STANDARD_REQUIRED ON)
-if(MSVC)
-    target_compile_options(folia_tree_sitter_html PRIVATE /wd4244 /wd4996)
-endif()
+add_subdirectory(src/markdown)
+add_subdirectory(src/math/editor)
 
 add_library(folia_core STATIC)
 target_compile_features(folia_core PUBLIC cxx_std_23)
 set_target_properties(folia_core PROPERTIES CXX_MODULE_STD ON)
 target_include_directories(folia_core PRIVATE
-    ${CMAKE_CURRENT_SOURCE_DIR}/third_party/tree-sitter/include
     ${CMAKE_CURRENT_SOURCE_DIR}/third_party/srell)
-target_link_libraries(folia_core PRIVATE folia_tree_sitter_html)
+target_link_libraries(folia_core PUBLIC folia::markdown)
 
 file(GLOB_RECURSE FOLIA_CORE_MODULE CONFIGURE_DEPENDS
     ${CMAKE_CURRENT_SOURCE_DIR}/src/core/*.ixx)
@@ -229,6 +216,8 @@ target_sources(folia_math PUBLIC FILE_SET CXX_MODULES FILES
     src/math/input/tex/configmacros/configuration.ixx
     src/math/input/tex/verb/configuration.ixx
     src/math/input/tex/upgreek/configuration.ixx
+    src/math/input/tex/default_packages.ixx
+    src/math/input/tex/mediawiki_texvc/configuration.ixx
     src/math/input/tex/gensymb/configuration.ixx
     src/math/input/tex/ams/methods.ixx
     src/math/input/tex/ams/items.ixx
@@ -330,6 +319,8 @@ target_sources(folia_math PUBLIC FILE_SET CXX_MODULES FILES
     src/math/util/regexp_host.ixx)
 target_sources(folia_math PRIVATE
     src/math/math.cpp
+    src/math/input/tex/default_packages.cpp
+    src/math/input/tex/mediawiki_texvc/configuration.cpp
     src/math/core/math_item.cpp
     src/math/core/math_item_state.cpp
     src/math/core/mml_tree/attributes.cpp
@@ -560,6 +551,7 @@ target_sources(folia_math PRIVATE src/math/util/js_case.cpp src/math/util/js_cas
 # Opaque application boundary. Only the C functions cross the DLL boundary;
 # the implementation and its C++ module dependencies remain private.
 add_library(FoliaNativeMath SHARED src/math/native_renderer_bridge.cpp)
+target_include_directories(FoliaNativeMath PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/src/math/include)
 target_compile_features(FoliaNativeMath PRIVATE cxx_std_23)
 set_target_properties(FoliaNativeMath PROPERTIES CXX_MODULE_STD ON
     RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
@@ -642,6 +634,12 @@ set(BOOST_UT_ENABLE_INSTALL OFF CACHE BOOL "Do not install vendored Boost.UT" FO
 add_subdirectory(third_party/ut EXCLUDE_FROM_ALL)
 
 enable_testing()
+add_executable(FoliaMathEditorTests tests/main.cpp tests/math/editor_syntax.cpp)
+target_compile_features(FoliaMathEditorTests PRIVATE cxx_std_23)
+set_target_properties(FoliaMathEditorTests PROPERTIES CXX_MODULE_STD ON)
+target_include_directories(FoliaMathEditorTests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/tests)
+target_link_libraries(FoliaMathEditorTests PRIVATE folia::math_editor Boost::ut_module)
+add_test(NAME FoliaMathEditorTests COMMAND FoliaMathEditorTests)
 add_executable(FoliaTests)
 target_compile_features(FoliaTests PRIVATE cxx_std_23)
 set_target_properties(FoliaTests PROPERTIES
@@ -649,16 +647,34 @@ set_target_properties(FoliaTests PROPERTIES
     CXX_SCAN_FOR_MODULES ON)
 file(GLOB_RECURSE FOLIA_TEST_SRC CONFIGURE_DEPENDS
     ${CMAKE_CURRENT_SOURCE_DIR}/tests/*.cpp)
+list(FILTER FOLIA_TEST_SRC EXCLUDE REGEX "/tests/support/")
 list(FILTER FOLIA_TEST_SRC EXCLUDE REGEX "/tests/platform/")
+list(FILTER FOLIA_TEST_SRC EXCLUDE REGEX "/tests/app/")
+list(FILTER FOLIA_TEST_SRC EXCLUDE REGEX "/tests/libraries/")
 list(FILTER FOLIA_TEST_SRC EXCLUDE REGEX "/tests/encoding/")
 list(FILTER FOLIA_TEST_SRC EXCLUDE REGEX "/tests/math/")
 list(FILTER FOLIA_TEST_SRC EXCLUDE REGEX "/tests/mermaid_cpp/")
 list(FILTER FOLIA_TEST_SRC EXCLUDE REGEX "/tests/parsing/test_commonmark\\.cpp$")
+list(FILTER FOLIA_TEST_SRC EXCLUDE REGEX "/tests/parsing/test_gfm\\.cpp$")
+list(FILTER FOLIA_TEST_SRC EXCLUDE REGEX "/tests/parsing/test_gfm_pathological\\.cpp$")
+list(FILTER FOLIA_TEST_SRC EXCLUDE REGEX "/tests/parsing/test_inline_cst_ownership\\.cpp$")
+list(FILTER FOLIA_TEST_SRC EXCLUDE REGEX "/tests/parsing/test_deep_block_ownership\\.cpp$")
+list(FILTER FOLIA_TEST_SRC EXCLUDE REGEX "/tests/parsing/test_serializer_deep\\.cpp$")
 list(FILTER FOLIA_TEST_SRC EXCLUDE REGEX "/tests/parsing/test_md4c_reference\\.cpp$")
 target_sources(FoliaTests PRIVATE
     ${FOLIA_TEST_SRC})
 target_include_directories(FoliaTests PRIVATE
-    ${CMAKE_CURRENT_SOURCE_DIR}/tests)
+    ${CMAKE_CURRENT_SOURCE_DIR}/tests
+    "${CMAKE_CURRENT_BINARY_DIR}/gfm-entities")
+set(FOLIA_GFM_ENTITY_CASES "${CMAKE_CURRENT_BINARY_DIR}/gfm-entities/gfm_entity_cases.inc")
+add_custom_command(OUTPUT "${FOLIA_GFM_ENTITY_CASES}"
+    COMMAND python "${CMAKE_CURRENT_SOURCE_DIR}/tools/markdown-conformance/generate_pinned_gfm_entities.py"
+        --fetch --output "${FOLIA_GFM_ENTITY_CASES}"
+    DEPENDS tools/markdown-conformance/generate_pinned_gfm_entities.py
+        tools/markdown-conformance/gfm-sources.lock.json
+    VERBATIM)
+add_custom_target(FoliaGfmEntityFixtures DEPENDS "${FOLIA_GFM_ENTITY_CASES}")
+add_dependencies(FoliaTests FoliaGfmEntityFixtures)
 target_link_libraries(FoliaTests PRIVATE folia_core folia_math Boost::ut_module)
 if(MSVC)
     # Native math recursion tests must reach the explicit 512-call resource
@@ -675,11 +691,14 @@ add_test(NAME FoliaTests COMMAND FoliaTests)
 add_executable(FoliaMathTests EXCLUDE_FROM_ALL
     tests/main.cpp
     tests/math/mathjax_full_profile_package_bootstrap.cpp
+    tests/math/tex_package_registry.cpp
     tests/math/math_cancellation_g147.cpp
     tests/math/native_renderer_bridge.cpp
     tests/math/mml_native_raii_foundation.cpp
     tests/math/native_raii_scene.cpp
     tests/math/lengths_native.cpp
+    tests/math/js_case.cpp
+    tests/math/ordered_map_storage.cpp
     tests/math/native_raii_regexp.cpp
     tests/math/native_tex_session.cpp
     tests/math/native_tex_definitions.cpp
@@ -833,10 +852,19 @@ add_executable(FoliaMathTests EXCLUDE_FROM_ALL
     tests/math/radical_native.cpp)
 target_compile_features(FoliaMathTests PRIVATE cxx_std_23)
 set_target_properties(FoliaMathTests PROPERTIES CXX_MODULE_STD ON CXX_SCAN_FOR_MODULES ON)
+
+# Replay the retained numeric Source corpus against the original typed utility.
+# This unused application utility is compiled only for its mathematical tests.
+target_sources(FoliaMathTests PRIVATE src/math/util/numeric.cpp)
+target_sources(FoliaMathTests PRIVATE
+    FILE_SET CXX_MODULES FILES
+    src/math/util/numeric.ixx
+    src/math/util/ordered_map_storage.ixx)
 target_include_directories(FoliaMathTests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/tests)
 target_compile_definitions(FoliaMathTests PRIVATE
     FOLIA_MATH_FIXTURE_DIR="${CMAKE_CURRENT_SOURCE_DIR}/tests/math/fixtures")
-target_link_libraries(FoliaMathTests PRIVATE folia_math FoliaNativeMath Boost::ut_module)
+target_sources(FoliaMathTests PRIVATE tests/math/editor_scanner_conformance.cpp)
+target_link_libraries(FoliaMathTests PRIVATE folia_math folia::math_editor FoliaNativeMath Boost::ut_module)
 add_test(NAME FoliaMathTests COMMAND FoliaMathTests)
 add_executable(FoliaMathFontDump EXCLUDE_FROM_ALL
     tools/math-port/font-data-dump.cpp)
@@ -904,8 +932,8 @@ if(WIN32)
 endif()
 
 # These CMake executables are console tests/probes; the WinUI app uses MSBuild.
-# Official specification tests are separate because the current parser is not
-# conformant yet. They fail normally; they are not a snapshot/probe baseline.
+# Official specification tests run the native source invariants and compare
+# projected HTML with the same canonicalizer used for official expected HTML.
 set(FOLIA_COMMONMARK_CASES "${CMAKE_CURRENT_BINARY_DIR}/commonmark/commonmark_cases.inc")
 add_custom_command(OUTPUT "${FOLIA_COMMONMARK_CASES}"
     COMMAND python "${CMAKE_CURRENT_SOURCE_DIR}/tools/markdown-conformance/prepare.py"
@@ -921,8 +949,85 @@ target_compile_features(FoliaCommonMarkTests PRIVATE cxx_std_23)
 set_target_properties(FoliaCommonMarkTests PROPERTIES CXX_MODULE_STD ON)
 target_include_directories(FoliaCommonMarkTests PRIVATE tests "${CMAKE_CURRENT_BINARY_DIR}/commonmark")
 target_link_libraries(FoliaCommonMarkTests PRIVATE folia_core Boost::ut_module)
-add_test(NAME FoliaCommonMarkTests COMMAND FoliaCommonMarkTests)
+add_test(NAME FoliaCommonMarkTests
+    COMMAND python "${CMAKE_CURRENT_SOURCE_DIR}/tools/markdown-conformance/run.py"
+        --executable "$<TARGET_FILE:FoliaCommonMarkTests>"
+        --output "${CMAKE_CURRENT_BINARY_DIR}/markdown-conformance")
 set_tests_properties(FoliaCommonMarkTests PROPERTIES LABELS "commonmark;conformance")
+
+set(FOLIA_GFM_CASES "${CMAKE_CURRENT_BINARY_DIR}/gfm/gfm_cases.inc")
+add_custom_command(OUTPUT "${FOLIA_GFM_CASES}"
+    COMMAND python "${CMAKE_CURRENT_SOURCE_DIR}/tools/markdown-conformance/prepare_gfm.py"
+        --output "${FOLIA_GFM_CASES}"
+    DEPENDS tools/markdown-conformance/prepare_gfm.py tools/markdown-conformance/prepare.py
+        tools/markdown-conformance/gfm-sources.lock.json
+    VERBATIM)
+add_executable(FoliaGfmTests EXCLUDE_FROM_ALL
+    tests/main.cpp tests/parsing/test_gfm.cpp tests/parsing/test_gfm_footnotes.cpp "${FOLIA_GFM_CASES}")
+target_compile_features(FoliaGfmTests PRIVATE cxx_std_23)
+set_target_properties(FoliaGfmTests PROPERTIES CXX_MODULE_STD ON)
+target_include_directories(FoliaGfmTests PRIVATE tests "${CMAKE_CURRENT_BINARY_DIR}/gfm")
+target_link_libraries(FoliaGfmTests PRIVATE folia_core Boost::ut_module)
+add_test(NAME FoliaGfmTests
+    COMMAND python "${CMAKE_CURRENT_SOURCE_DIR}/tools/markdown-conformance/run.py" --suite gfm
+        --executable "$<TARGET_FILE:FoliaGfmTests>"
+        --output "${CMAKE_CURRENT_BINARY_DIR}/gfm-conformance")
+set_tests_properties(FoliaGfmTests PROPERTIES LABELS "gfm;conformance")
+
+# Full-size generated parser stress cases are isolated in one process per case
+# by the runner so a pathological input cannot hold the ordinary console suite.
+add_executable(FoliaGfmPathologicalTests EXCLUDE_FROM_ALL
+    tests/main.cpp tests/parsing/test_gfm_pathological.cpp
+    tests/parsing/test_inline_cst_ownership.cpp
+    tests/parsing/test_deep_block_ownership.cpp
+    tests/parsing/test_parser_completion.cpp
+    tests/parsing/test_parser_container_frames.cpp
+    tests/parsing/test_block_line_thematic.cpp)
+target_compile_features(FoliaGfmPathologicalTests PRIVATE cxx_std_23)
+set_target_properties(FoliaGfmPathologicalTests PROPERTIES CXX_MODULE_STD ON)
+target_include_directories(FoliaGfmPathologicalTests PRIVATE tests)
+target_link_libraries(FoliaGfmPathologicalTests PRIVATE folia_core Boost::ut_module)
+add_test(NAME FoliaGfmPathologicalTests
+    COMMAND python "${CMAKE_CURRENT_SOURCE_DIR}/tools/markdown-conformance/run_gfm_pathological.py"
+        --executable "$<TARGET_FILE:FoliaGfmPathologicalTests>"
+        --report "${CMAKE_CURRENT_BINARY_DIR}/gfm-pathological/results.json"
+        --timeout-seconds 30)
+set_tests_properties(FoliaGfmPathologicalTests PROPERTIES LABELS "gfm;generated;bounded")
+add_test(NAME FoliaInlineCstOwnershipTests
+    COMMAND FoliaGfmPathologicalTests "*inline_cst_deep_owner_copy_move_and_clear*")
+set_tests_properties(FoliaInlineCstOwnershipTests PROPERTIES LABELS "gfm;generated;bounded" TIMEOUT 30)
+add_test(NAME FoliaParserCompletionTests
+    COMMAND FoliaGfmPathologicalTests "*parser_completion_matches_serializer_and_exact_save*")
+set_tests_properties(FoliaParserCompletionTests PROPERTIES LABELS "gfm;generated;bounded" TIMEOUT 30)
+add_test(NAME FoliaParserContainerFrameTests
+    COMMAND FoliaGfmPathologicalTests "*container_frame*")
+set_tests_properties(FoliaParserContainerFrameTests PROPERTIES LABELS "gfm;parser;bounded" TIMEOUT 30)
+add_test(NAME FoliaBlockLineThematicTests
+    COMMAND FoliaGfmPathologicalTests "*block_line_thematic*")
+set_tests_properties(FoliaBlockLineThematicTests PROPERTIES LABELS "gfm;parser;bounded" TIMEOUT 30)
+add_test(NAME FoliaDeepBlockOwnershipTests
+    COMMAND FoliaGfmPathologicalTests "*deep_block_ownership_copy_move_clear_and_traversal*")
+set_tests_properties(FoliaDeepBlockOwnershipTests PROPERTIES LABELS "gfm;generated;bounded" TIMEOUT 30)
+# Full-depth serializer cases have independent bounded processes.
+add_executable(FoliaDeepSerializerTests EXCLUDE_FROM_ALL
+    tests/main.cpp tests/parsing/test_serializer_deep.cpp)
+target_compile_features(FoliaDeepSerializerTests PRIVATE cxx_std_23)
+set_target_properties(FoliaDeepSerializerTests PROPERTIES
+    CXX_MODULE_STD ON CXX_SCAN_FOR_MODULES ON)
+target_include_directories(FoliaDeepSerializerTests PRIVATE tests)
+target_link_libraries(FoliaDeepSerializerTests PRIVATE folia_core Boost::ut_module)
+add_test(NAME FoliaDeepSerializerQuotes
+    COMMAND FoliaDeepSerializerTests "*deep_quote_50000*")
+add_test(NAME FoliaDeepSerializerLists
+    COMMAND FoliaDeepSerializerTests "*deep_nested_lists_1000*")
+set_tests_properties(FoliaDeepSerializerQuotes FoliaDeepSerializerLists
+    PROPERTIES LABELS "gfm;generated;bounded" TIMEOUT 60)
+
+add_test(NAME FoliaGfmPathologicalRunnerTests
+    COMMAND python -m unittest discover
+        -s "${CMAKE_CURRENT_SOURCE_DIR}/tools/markdown-conformance/tests"
+        -p test_run_gfm_pathological.py)
+set_tests_properties(FoliaGfmPathologicalRunnerTests PROPERTIES LABELS "gfm;runner")
 
 option(FOLIA_BUILD_MD4C_REFERENCE_TESTS "Build md4c controls for failing official CommonMark cases" OFF)
 if(FOLIA_BUILD_MD4C_REFERENCE_TESTS)
@@ -957,7 +1062,7 @@ endif()
 
 # Keep CRT reports on stderr, including failures before main().
 if(WIN32 AND MSVC)
-    add_library(folia_console_test_runtime OBJECT tools/test-support/windows_console_runtime.cpp)
+    add_library(folia_console_test_runtime OBJECT tests/support/windows_console_runtime.cpp)
     target_compile_features(folia_console_test_runtime PRIVATE cxx_std_23)
     set_target_properties(folia_console_test_runtime PROPERTIES
         CXX_MODULE_STD OFF CXX_SCAN_FOR_MODULES OFF)

@@ -31,6 +31,7 @@ namespace winrt::Folia
         }
         interactionMap.Clear();
         nonInteractiveRegions.clear();
+        inlineMathPreviewBounds.reset();
         auto padding = (std::min)(styleSheet.horizontalPadding, (std::max)(12.0f, resources.surfaceWidthDip * 0.06f));
         auto sourceDocument = !frame.renderModel.blocks.empty()
             && frame.renderModel.blocks.front().source_mode;
@@ -74,8 +75,8 @@ namespace winrt::Folia
             frame.baseDirectory,
             !printMode);
         std::vector<std::uint64_t> visibleMath;
-        auto drawMath = [&](MathJaxSvgFragment const& fragment, D2D1_POINT_2F origin, D2D1_COLOR_F) {
-            if (origin.x + fragment.width < 0.0f || origin.y + fragment.height < 0.0f
+        auto drawMath = [&](MathJaxSvgFragment const& fragment, D2D1_POINT_2F origin, D2D1_COLOR_F, float scale) {
+            if (origin.x + fragment.width * scale < 0.0f || origin.y + fragment.height * scale < 0.0f
                 || origin.x > resources.surfaceWidthDip || origin.y > resources.surfaceHeightDip)
                 return true;
             visibleMath.push_back(fragment.renderId);
@@ -91,9 +92,11 @@ namespace winrt::Folia
             return svgPainter.Draw(
                 fragment.renderId,
                 *payload,
+                fragment.width * scale,
+                fragment.height * scale,
+                origin,
                 fragment.width,
-                fragment.height,
-                origin);
+                fragment.height);
         };
         auto drawMathFallback = [&](folia::TextSpan, D2D1_POINT_2F origin) {
             auto label = Localize(L"Formula");
@@ -137,7 +140,7 @@ namespace winrt::Folia
                 resources.mutedBrush.Get());
         }
 
-        auto remoteImageGeneration = renderCache.RemoteImageGeneration();
+        auto remoteImageGeneration = renderCache.images.ResourceGeneration();
         EditorDocumentBlockPreparer blockPreparer(
             frame,
             resources,
@@ -179,13 +182,14 @@ namespace winrt::Folia
             resources,
             styleSheet,
             interactionMap,
+            caretAnimation,
             nonInteractiveRegions,
             inlineImages,
             documentPainter,
             drawMath,
             drawMathFallback,
             drawMermaid);
-        renderPass.Paint(
+        inlineMathPreviewBounds = renderPass.Paint(
             frame,
             *preparedDocument,
             selection,

@@ -5,26 +5,26 @@
 #include <vector>
 
 #include "support/folia_test.hpp"
-import folia.core.ast;
-import folia.core.block_source;
-import folia.core.block_tree;
+import folia.markdown.ast;
+import folia.markdown.block_source;
+import folia.markdown.block_tree;
 import folia.core.command;
-import folia.core.dialect;
-import folia.core.document;
+import folia.markdown.dialect;
+import folia.markdown.document;
 import folia.core.document_edit;
 import folia.core.document_ids;
-import folia.core.document_text;
+import folia.markdown.document_text;
 import folia.core.editor;
-import folia.core.inline_cst;
-import folia.core.inline_document;
-import folia.core.instrumentation;
+import folia.markdown.inline_cst;
+import folia.markdown.inline_document;
+import folia.markdown.instrumentation;
 import folia.core.input;
 import folia.core.render_builder;
 import folia.core.render_model;
-import folia.core.serializer;
-import folia.core.text_edit;
+import folia.markdown.serializer;
+import folia.markdown.text_edit;
 import folia.core.theme;
-import folia.core.utf;
+import folia.markdown.utf;
 
 using namespace folia;
 using namespace boost::ut;
@@ -92,16 +92,17 @@ suite editor_command_tests = [] {
     expect(fatal(bool(editor.selection() == after_selection)));
 };
 
-"source_offset_movement_counts_markers"_test = [] {
+"source_offset_movement_keeps_complete_markers_as_semantic_units"_test = [] {
     Editor editor("**abc**");
     editor.set_selection(caret(first_text(editor), 0));
-    for (std::size_t offset = 1; offset <= 7; ++offset) {
+    for (std::size_t offset : {2u, 3u, 4u, 5u, 7u}) {
         expect(fatal(bool(editor.execute_document_move(DocumentMove::Right, false))));
         expect(fatal(bool(editor.selection().active.source_offset == offset)));
     }
     expect(fatal(bool(!editor.execute_document_move(DocumentMove::Right, false))));
     expect(fatal(bool(editor.execute_document_move(DocumentMove::Left, true))));
     expect(fatal(bool(!editor.selection().is_caret())));
+    expect(fatal(bool(editor.selection().active.source_offset == 5u)));
 };
 
 "select_all_uses_container_ids_and_source_offsets"_test = [] {

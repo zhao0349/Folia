@@ -20,6 +20,14 @@ namespace winrt::Folia
 
     struct EditorStyleSheet
     {
+        // Fixed SVG tile and external clearance, relative to the body size.
+        struct MarkerStyle
+        {
+            float sizeEm = 1.05f;
+            float gapEm = 0.30f;
+        } marker;
+        std::shared_ptr<const folia::SyntaxMarkerTheme> markerAssets;
+        D2D1_COLOR_F markerColor{};
         EditorFontStyle body;
         EditorFontStyle heading1;
         EditorFontStyle heading2;
@@ -32,7 +40,11 @@ namespace winrt::Folia
         D2D1_COLOR_F lineNumberBackgroundColor{};
         D2D1_COLOR_F accentColor{};
         D2D1_COLOR_F codeTextColor{};
+        D2D1_COLOR_F inlineCodeTextColor{}, inlineCodeBackgroundColor{};
         D2D1_COLOR_F panelColor{};
+        D2D1_COLOR_F previewBackgroundColor{}, previewBorderColor{};
+        folia::ThemeMathPreview mathPreview;
+        folia::ThemeEditor editor;
         D2D1_COLOR_F nestedQuoteColor{};
         D2D1_COLOR_F calloutNoteBackgroundColor{};
         D2D1_COLOR_F calloutNoteBorderColor{};
