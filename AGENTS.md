@@ -1,15 +1,22 @@
 # Repository instructions
 
-## Mermaid 重构长期约定
+## Mermaid C++ 迁移指南（Agent 执行规范）
 
-先读 docs/mermaid-cpp/README.md 和 HANDOFF.md，核对 HEAD、未提交改动、验证状态与所有权。
-范围限 Folia 所需 Mermaid 功能。先完成应用功能链，再修常见缺陷，最后处理有实际依据的低频问题；不做范围外兼容或无界加固。
-每包明确消费者、文件所有权、依赖、固定案例、退出条件及下一步。通过即小批提交，不反复打磨已通过阶段。
-保留原版算法、真实文字测量、来源 pin 和许可证；核心不使用 Windows API。不得用逐案例特判或放宽容差替代修复。
-并行工作时实际派工并维护 owner；共享入口/平台/CMake/工作流/source-lock 由一位集成负责人修改。用户要求直接完成时不得召唤子智能体。
-交接原位维护当前状态、真实阻塞和下一步，不累计历史 checkpoint。恢复后先读现状，不盲从旧聊天 next。
-fork 只保留 master 和 feat/mermaid-cpp-port（dev 角色，现有上游 PR 来源）。内部执行资料仅留 master，不随功能挑选进入上游。
-上游 PR #1 只能更新，未经明确授权不得合并、发布或切换生产依赖。不得强推重写历史。
+在参与 Mermaid C++23 原生渲染模块（`third_party/mermaid-cpp/`、`src/platform/text/`、`tools/mermaid-cpp/`）的开发或恢复上下文时，必须首先执行以下步骤：
+
+1. **必读入口文档**：
+   - 开始编码或规划前，先完整阅读 [`docs/mermaid-cpp/HANDOFF.md`](docs/mermaid-cpp/HANDOFF.md) 与 [`docs/mermaid-cpp/README.md`](docs/mermaid-cpp/README.md)。
+   - `docs/mermaid-cpp/HANDOFF.md` 顶部记录了当前已验证的基准 commit、已接入公共入口的 20 个图族清单，以及待收尾任务（**Task A：ZenUML 公共入口**、**Task B：Class 默认 ELK 布局**、**Task C：ER 图原生实现**、**Task D：Requirement 图等补齐**、**Task E：WinUI 宿主切换**）的分步执行指令与允许修改的文件范围。
+2. **模块与平台边界（硬约束）**：
+   - **核心层（平台无关）**：`third_party/mermaid-cpp/src/` 下的所有模块（`.ixx` / `.cpp`）统一使用 C++23 modules 与 `import std;`，严禁包含任何 Windows、WinRT、Direct2D 或 DirectWrite 头文件。
+   - **平台测量与桥接层（Windows）**：字体解析与文本测量位于 `src/platform/text/mermaid_measurer.ixx`，平台渲染桥接位于 `src/platform/text/mermaid_renderer.ixx`，DLL 会话封装位于 `src/platform/text/mermaid_host.ixx`。
+   - **CMake 源文件收集规则**：`tools/mermaid-cpp/CMakeLists.txt` 对 `third_party/mermaid-cpp/src/*.{ixx,cpp}` 和 `tests/mermaid_cpp/*.cpp` 使用 `GLOB_RECURSE` 自动收集（放入即参与编译，切勿留存未完成文件）；而 `tests/platform/*.cpp` 则在 `FoliaMermaidPlatformTests` 目标中**显式逐个列出**（新增平台测试文件时必须同步写入该列表）。
+3. **算法还原与文本测量纪律**：
+   - 行为基准固定为官方 `mermaid-js/mermaid` **12.2.0**（commit `1fb7869866dd619168d840291c9c54b4f129758b`），新增上游依赖文件时需将源码 SHA-256 记入 `docs/mermaid-cpp/source-lock.json` 并核对 `third_party/mermaid-cpp/THIRD_PARTY_NOTICES.md`。
+   - 凡涉及文本宽高的布局必须使用平台层传入的 DirectWrite 实测数据（注意调用 `MermaidMeasurer::measure` 前须先通过 `resolve_family` 将 CSS 字体族列表解析为单个已安装字体名）。严禁使用“字符数 × 固定系数”估算字宽、按测试样例硬编码坐标或放宽几何比较容差（SVG 实测几何容差固定为 `1.5`，ELK 算子坐标容差固定为 `1e-4`）。
+4. **并行分工与交接更新**：
+   - 共享接线文件（`render_entry.{ixx,cpp}`、`frontend.cpp`、`mermaid_renderer.ixx`、`tools/mermaid-cpp/CMakeLists.txt`、`.github/workflows/mermaid-cpp.yml`）在多人/多智能体并行时由集成负责人统一合入；独立图族负责人仅修改所属图族的源码、测试与 fixture。
+   - 每完成一个任务包并通过对应 `FoliaMermaidTests` / `FoliaMermaidPlatformTests` 及浏览器 SVG 对照后，立即小批提交，并原位更新 `docs/mermaid-cpp/HANDOFF.md` 顶部的基线状态与任务进度（不追加历史流水账）。
 
 ## Math migration continuity
 

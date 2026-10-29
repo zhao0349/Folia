@@ -1,35 +1,13 @@
-# Stopped native Mermaid migration checkpoint — 2026-10-26
+# 历史补丁归档说明（2026-10-26）
 
-The user requested stopping implementation and saving all current work in a new PR targeting the source branch of upstream PR #1.
-This commit preserves source and tests; it does **not** claim full Mermaid SVG acceptance.
+本目录保存 2026-10-26 阶段暂停时的本地工作区补丁归档与各子任务独立候选补丁（`canonical.patch.gz` 与 `luna01.patch` ~ `luna12.patch`），仅在 Fork 仓库 `master` 分支中作为历史参考保留，不随功能分支进入上游 PR。
 
-The PR branch had 22 newer commits beyond the local starting snapshot. The checkpoint
-keeps that branch history and its active source intact. `canonical.patch.gz` captures all
-1,772 staged local source/test/document changes against the reconstructed local snapshot
-of original contribution `011e0656`. It includes the persistent original SVG regression
-fixtures, numerical source/vendor records, native diagram modules and test tools.
+## 文件说明
 
-`luna01.patch` through `luna12.patch` preserve every differing private source, platform
-and test file relative to the stopped canonical tree. These are independent candidates;
-they must not all be blindly applied in order. Shared entry/platform edits can conflict.
-The manifest records both sides' SHA-256 values and all saved comparison summaries.
+- `canonical.patch.gz`：基于早期快照 `011e0656` 导出的 1,772 个文件变更归档（解压后为 45,641,089 字节，原始与压缩包 SHA-256 见 `manifest.json`）。
+- `luna01.patch` ~ `luna12.patch`：当时 12 个并行子任务相对于 `canonical.patch.gz` 的独立增量补丁。各补丁对应的原始 SHA-256 与对比摘要记录在 `manifest.json` 中。
+- `.gitattributes`：禁用本目录下补丁文件的 CRLF 自动换行转换，确保补丁字节哈希保持一致。
 
-To recover, reconstruct the local starting source at `011e0656`, decompress `canonical.patch.gz` and apply the patch
-with Git's three-way conflict handling, then review the required worker patch. When
-continuing directly on the PR head, merge the checkpoint against its 22 subsequent
-commits instead of replacing the branch tree. Build products, package restores,
-browser profiles and duplicated generated corpora are intentionally excluded.
+## 使用与选取原则
 
-Latest canonical verification: native build passed; core CTest failed; platform and
-1,024-observation native-host regression passed. Later worker fixes are not a substitute
-for another integrated run. The historical complete canonical byte gate remains
-798 exact SVGs out of 8,812 originals, with 8,014 failures and 1,386 original errors.
-Full acceptance remains false.
-
-The private Railroad-only report records **212/212 exact original SVGs**, zero failures,
-DLL SHA-256 `d5d708373d65a5cfadf301f2a2dd9460ff052398b88f8d697effca4b9af42693`.
-Its implementation and shared integration are saved in `luna10.patch`; they had not
-been integrated and independently accepted by root when the user stopped work.
-Other families still have unsupported stages or byte mismatches.
-
-The canonical archive decompresses to 45,641,089 bytes; the manifest records both compressed and original SHA-256 checksums.
+当前主开发分支 `feat/mermaid-cpp-port` 已完成 20 个图族的原生实现并通过 Windows 四配置 CI 验证。本归档中的早期补丁仅用于在需要时提取单个独立图族（如 Requirement、ER 等）的局部参考代码，请勿直接整体覆盖当前主分支已验证通过的实现。具体取舍结论见上级目录的 [`REVIEW-2026-10-28.md`](../REVIEW-2026-10-28.md)。
